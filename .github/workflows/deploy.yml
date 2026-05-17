@@ -26,12 +26,18 @@ jobs:
         run: mvn -B -DskipTests clean package -Pprod
         working-directory: rebuild-myself-server
 
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ALIYUN_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
       - name: Upload JAR to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          key_path: ~/.ssh/deploy_key
           port: 22
           source: "rebuild-myself-server/target/rebuild-myself-server-1.0.0.jar"
           target: "/data/rebuild-myself"
@@ -42,7 +48,7 @@ jobs:
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
+          key_path: ~/.ssh/deploy_key
           port: 22
           script: |
             systemctl daemon-reload
