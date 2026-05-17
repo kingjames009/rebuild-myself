@@ -11,6 +11,8 @@ import '../../providers/study_provider.dart';
 import '../../providers/focus_timer_provider.dart';
 import '../../models/daily_plan.dart';
 import '../../services/sync_service.dart';
+import '../../services/api_client.dart';
+import '../../services/database_helper.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -39,14 +41,39 @@ class _HomePageState extends State<HomePage> {
     final elite = context.read<EliteProvider>();
     await elite.loadAll();
 
-    // Auto-generate today's plan if none exists
+    // Auto-generate today's plan only if no plans exist locally AND on server
     final todayPlans = elite.plans.where((p) => p.planDate == dateStr).toList();
     if (todayPlans.isEmpty) {
-      final goalProv = context.read<GoalProvider>();
-      final todayTasks = goalProv.tasks
-          .where((t) => t.taskDate == dateStr && t.isComplete != 1)
-          .toList();
-      await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
+      // Check server first — don't regenerate if plans already exist
+      final api = ApiClient();
+      bool serverHasPlans = false;
+      if (api.hasToken) {
+        try {
+          final resp = await api.get('/plan/date/$dateStr');
+          if (resp.ok && resp.data is List && (resp.data as List).isNotEmpty) {
+            serverHasPlans = true;
+            // Pull server plans into local storage
+            final db = await DatabaseHelper().db;
+            await db.delete('daily_model_plan', where: 'planDate = ?', whereArgs: [dateStr]);
+            await db.delete('daily_model_plan', where: 'plan_date = ?', whereArgs: [dateStr]);
+            for (final item in resp.data) {
+              if (item is! Map) continue;
+              final plan = DailyModelPlan.fromJson(Map<String, dynamic>.from(item));
+              final data = plan.toJson();
+              data['synced'] = 1;
+              await db.insert('daily_model_plan', data);
+            }
+            await elite.loadAll();
+          }
+        } catch (_) {}
+      }
+      if (!serverHasPlans) {
+        final goalProv = context.read<GoalProvider>();
+        final todayTasks = goalProv.tasks
+            .where((t) => t.taskDate == dateStr && t.isComplete != 1)
+            .toList();
+        await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
+      }
     }
   }
 

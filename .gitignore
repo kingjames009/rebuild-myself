@@ -84,3 +84,4 @@ Desktop.ini
 # Override: track deploy env template
 !/rebuild-myself-server/deploy/env.sh
 deploy_key
+deploy_key.txt

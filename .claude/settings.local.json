@@ -156,7 +156,22 @@
       "Bash(ls -la ~/.ssh/)",
       "Bash(ssh-keygen -l -f ~/.ssh/id_rsa)",
       "Bash(git init *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git branch *)",
+      "Bash(gh auth *)",
+      "Bash(git config *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(ssh -o ConnectTimeout=10 -T git@github.com)",
+      "Bash(ssh-keygen *)",
+      "Bash(ssh -o ConnectTimeout=15 -vT git@github.com)",
+      "Bash(ssh *)",
+      "Bash(git commit *)",
+      "Bash(base64 -w0)",
+      "Bash(mvn -B compile)",
+      "Bash(gh run *)",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); runs=data.get\\('workflow_runs',[]\\); [print\\(f\\\\\"{r['name']} — {r['status']} / {r['conclusion']} — {r['created_at']}\\\\\"\\) for r in runs]\")"
     ]
   }
 }

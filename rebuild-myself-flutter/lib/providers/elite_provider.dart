@@ -335,10 +335,12 @@ class EliteProvider extends ChangeNotifier {
     for (int i = 0; i < todayPlans.length; i++) {
       final plan = todayPlans[i];
       final newPeriod = periods[i];
-      if (plan.timePeriod != newPeriod) {
+      final oldPeriod = plan.timePeriod ?? '';
+      if (oldPeriod != newPeriod) {
+        // Use planDate + old timePeriod to locate the row — planId may be null
         await db.update('daily_model_plan',
             {'timePeriod': newPeriod, 'time_period': newPeriod},
-            where: 'planId = ?', whereArgs: [plan.planId]);
+            where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, oldPeriod]);
       }
     }
 
@@ -453,9 +455,11 @@ class EliteProvider extends ChangeNotifier {
             // Ensure every goal gets at least one plan item
             _tagPlanWithGoalTitles(plans, goals ?? []);
 
-            // Insert all plans
+            // Insert all plans — already saved on server, mark synced
             for (final p in plans) {
-              await db.insert('daily_model_plan', p.toJson());
+              final data = p.toJson();
+              data['synced'] = 1;
+              await db.insert('daily_model_plan', data);
             }
 
             await loadAll();
