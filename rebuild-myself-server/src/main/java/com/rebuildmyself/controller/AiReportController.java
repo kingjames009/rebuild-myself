@@ -6,6 +6,7 @@ import com.rebuildmyself.service.AiPsychologicalReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 @RestController
@@ -19,7 +20,9 @@ public class AiReportController {
     public Result<?> generateReport(@RequestBody Map<String, Object> body,
                                     @RequestAttribute("userId") Long userId) {
         int cycleType = body.get("cycleType") instanceof Integer i ? i : 1;
-        return Result.ok(aiPsychologicalReportService.generateReport(userId, cycleType));
+        String dateStr = body.get("date") instanceof String s && !s.isEmpty() ? s : null;
+        LocalDate date = dateStr != null ? LocalDate.parse(dateStr) : null;
+        return Result.ok(aiPsychologicalReportService.generateReport(userId, cycleType, date));
     }
 
     @GetMapping("/page")

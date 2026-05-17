@@ -35,32 +35,32 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
     private final AiUtil aiUtil;
 
     @Override
-    public AiPsychologicalReport generateReport(Long userId, Integer cycleType) {
-        // Calculate date range based on cycleType
-        LocalDate today = LocalDate.now();
+    public AiPsychologicalReport generateReport(Long userId, Integer cycleType, LocalDate date) {
+        // Use provided date, default to today
+        LocalDate refDate = date != null ? date : LocalDate.now();
         LocalDate startDate;
         LocalDate endDate;
 
         switch (cycleType) {
-            case 1: // 今天
-                startDate = today;
-                endDate = today;
+            case 1: // 日复盘 — refDate 那天
+                startDate = refDate;
+                endDate = refDate;
                 break;
             case 2: // 本周
-                startDate = today.with(DayOfWeek.MONDAY);
-                endDate = today.with(DayOfWeek.SUNDAY);
+                startDate = refDate.with(DayOfWeek.MONDAY);
+                endDate = refDate.with(DayOfWeek.SUNDAY);
                 break;
             case 3: // 本月
-                startDate = today.withDayOfMonth(1);
-                endDate = today.withDayOfMonth(today.lengthOfMonth());
+                startDate = refDate.withDayOfMonth(1);
+                endDate = refDate.withDayOfMonth(refDate.lengthOfMonth());
                 break;
             case 4: // 本年
-                startDate = today.withDayOfYear(1);
-                endDate = today.withDayOfYear(today.lengthOfYear());
+                startDate = refDate.withDayOfYear(1);
+                endDate = refDate.withDayOfYear(refDate.lengthOfYear());
                 break;
             default:
-                startDate = today;
-                endDate = today;
+                startDate = refDate;
+                endDate = refDate;
         }
 
         LocalDateTime startDateTime = startDate.atStartOfDay();

@@ -25,6 +25,8 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _lockExists = false;
   final _nicknameFocus = FocusNode();
   final _healthFocus = FocusNode();
+  final _weightFocus = FocusNode();
+  final _healthNoteFocus = FocusNode();
 
   @override
   void initState() {
@@ -48,6 +50,12 @@ class _SettingsPageState extends State<SettingsPage> {
     _healthFocus.addListener(() {
       if (!_healthFocus.hasFocus) _saveHealth();
     });
+    _weightFocus.addListener(() {
+      if (!_weightFocus.hasFocus) _saveHealth();
+    });
+    _healthNoteFocus.addListener(() {
+      if (!_healthNoteFocus.hasFocus) _saveHealth();
+    });
     _nicknameFocus.addListener(() {
       if (!_nicknameFocus.hasFocus) {
         _saveNickname();
@@ -57,6 +65,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   void dispose() {
+    _saveHealth();
     _nicknameCtrl.dispose();
     _goalCtrl.dispose();
     _lockPwdCtrl.dispose();
@@ -65,6 +74,8 @@ class _SettingsPageState extends State<SettingsPage> {
     _healthNoteCtrl.dispose();
     _nicknameFocus.dispose();
     _healthFocus.dispose();
+    _weightFocus.dispose();
+    _healthNoteFocus.dispose();
     super.dispose();
   }
 
@@ -374,6 +385,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       Expanded(
                         child: TextField(
                           controller: _weightCtrl,
+                          focusNode: _weightFocus,
                           textAlign: TextAlign.center,
                           keyboardType: TextInputType.number,
                           style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
@@ -391,6 +403,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: _healthNoteCtrl,
+                    focusNode: _healthNoteFocus,
                     textAlign: TextAlign.center,
                     style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                     decoration: const InputDecoration(

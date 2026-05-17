@@ -274,13 +274,10 @@ class _HomePageState extends State<HomePage> {
                         elite.reorderPlan(dateStr, oldIndex, newIndex);
                       },
                       proxyDecorator: (child, index, animation) {
-                        return AnimatedBuilder(
-                          animation: animation,
-                          builder: (_, child) => Material(
-                            elevation: 2,
-                            borderRadius: BorderRadius.circular(8),
-                            child: child,
-                          ),
+                        return Material(
+                          elevation: 4,
+                          shadowColor: AppTheme.primary.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(10),
                           child: child,
                         );
                       },
@@ -295,33 +292,36 @@ class _HomePageState extends State<HomePage> {
                         return Container(
                           key: ValueKey(p.planId),
                           padding: const EdgeInsets.only(bottom: 6),
-                          child: GestureDetector(
-                            onTap: () => _showFocusSheet(
-                                context, dateStr, period, content, existingNote),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 10, horizontal: 12),
-                              decoration: BoxDecoration(
-                                color: hasNote
-                                    ? AppTheme.success.withValues(alpha: 0.04)
-                                    : AppTheme.primary.withValues(alpha: 0.02),
-                                borderRadius: BorderRadius.circular(8),
-                                border: hasNote
-                                    ? Border.all(
-                                        color:
-                                            AppTheme.success.withValues(alpha: 0.15))
-                                    : null,
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ReorderableDragStartListener(
-                                    index: i,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: hasNote
+                                  ? AppTheme.success.withValues(alpha: 0.04)
+                                  : AppTheme.primary.withValues(alpha: 0.02),
+                              borderRadius: BorderRadius.circular(8),
+                              border: hasNote
+                                  ? Border.all(
+                                      color:
+                                          AppTheme.success.withValues(alpha: 0.15))
+                                  : null,
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ReorderableDragStartListener(
+                                  index: i,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
                                     child: const Icon(Icons.drag_handle,
-                                        size: 18, color: AppTheme.textMuted),
+                                        size: 22, color: AppTheme.textMuted),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Container(
+                                ),
+                                const SizedBox(width: 6),
+                                GestureDetector(
+                                  onTap: () => _showFocusSheet(
+                                      context, dateStr, period, content, existingNote),
+                                  child: Container(
                                     width: 10,
                                     height: 10,
                                     margin: const EdgeInsets.only(top: 4),
@@ -331,28 +331,54 @@ class _HomePageState extends State<HomePage> {
                                             : AppTheme.primary,
                                         shape: BoxShape.circle),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Container(
+                                ),
+                                const SizedBox(width: 10),
+                                GestureDetector(
+                                  onTap: () => _showTimeEditSheet(
+                                      context, dateStr, period, p),
+                                  child: Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 8, vertical: 3),
                                     decoration: BoxDecoration(
                                         color: AppTheme.primary
                                             .withValues(alpha: 0.06),
                                         borderRadius: BorderRadius.circular(6)),
-                                    child: Text(period,
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppTheme.primary)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(period,
+                                            style: const TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppTheme.primary)),
+                                        const SizedBox(width: 2),
+                                        const Icon(Icons.access_time,
+                                            size: 11, color: AppTheme.primary),
+                                      ],
+                                    ),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => _showContentEditSheet(
+                                        context, dateStr, period, content),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(content,
-                                            style: const TextStyle(fontSize: 14)),
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(content,
+                                                  style: const TextStyle(fontSize: 14)),
+                                            ),
+                                            const SizedBox(width: 2),
+                                            const Icon(Icons.edit,
+                                                size: 14,
+                                                color: AppTheme.textMuted),
+                                          ],
+                                        ),
                                         const SizedBox(height: 4),
                                         Row(
                                           children: [
@@ -402,8 +428,12 @@ class _HomePageState extends State<HomePage> {
                                       ],
                                     ),
                                   ),
-                                  const SizedBox(width: 4),
-                                  Icon(
+                                ),
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () => _showFocusSheet(
+                                      context, dateStr, period, content, existingNote),
+                                  child: Icon(
                                     hasNote
                                         ? Icons.edit_note
                                         : Icons.add_circle_outline,
@@ -412,8 +442,8 @@ class _HomePageState extends State<HomePage> {
                                         ? AppTheme.success
                                         : AppTheme.textMuted,
                                   ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -755,6 +785,256 @@ class _HomePageState extends State<HomePage> {
     return 0;
   }
 
+  /// Edit dialog for modifying plan content text with preset icons.
+  void _showContentEditSheet(BuildContext context, String date, String period,
+      String currentContent) {
+    final ctrl = TextEditingController(text: currentContent);
+    const presets = [
+      '📚 学习', '💻 开发', '🏃 运动', '🧘 冥想',
+      '💰 财务', '✍️ 写作', '🎯 目标', '🍱 休息',
+      '📖 阅读', '🎵 音乐', '🌿 放松', '📊 规划',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6)),
+                        child: Text(period,
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.primary)),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('编辑计划内容', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Preset icon chips
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: presets.map((p) {
+                      final emoji = p.substring(0, 2);
+                      final label = p.substring(3);
+                      return GestureDetector(
+                        onTap: () {
+                          String text = ctrl.text;
+                          // Remove existing emoji prefix if any
+                          for (final e in ['📚', '💻', '🏃', '🧘', '💰', '✍️', '🎯', '🍱', '📖', '🎵', '🌿', '📊']) {
+                            if (text.startsWith(e)) {
+                              text = text.substring(e.length).trimLeft();
+                              break;
+                            }
+                          }
+                          ctrl.text = '$emoji $text'.trimLeft();
+                          setSheetState(() {});
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.success.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppTheme.border),
+                          ),
+                          child: Text('$emoji $label', style: const TextStyle(fontSize: 12)),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      hintText: '输入计划内容...',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final newContent = ctrl.text.trim();
+                        if (newContent.isNotEmpty && newContent != currentContent) {
+                          await context.read<EliteProvider>().updatePlanContent(date, period, newContent);
+                        }
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                      },
+                      child: const Text('保存内容'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Edit dialog for adjusting plan time period.
+  void _showTimeEditSheet(BuildContext context, String date, String period,
+      DailyModelPlan plan) {
+    final parts = period.split('-');
+    String startStr = parts.isNotEmpty ? parts[0] : '09:00';
+    String endStr = parts.length > 1 ? parts[1] : '10:00';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('调整时间段', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text('当前内容：${plan.planContent ?? ""}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _TimeField(
+                          label: '开始时间',
+                          initial: startStr,
+                          onChanged: (v) {
+                            startStr = v;
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 8),
+                        child: Text('—', style: TextStyle(fontSize: 20, color: AppTheme.textMuted)),
+                      ),
+                      Expanded(
+                        child: _TimeField(
+                          label: '结束时间',
+                          initial: endStr,
+                          onChanged: (v) {
+                            endStr = v;
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Quick presets
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      _presetChip('30分钟', () {
+                        final end = _addMinutes(startStr, 30);
+                        endStr = end;
+                        setSheetState(() {});
+                      }),
+                      _presetChip('1小时', () {
+                        final end = _addMinutes(startStr, 60);
+                        endStr = end;
+                        setSheetState(() {});
+                      }),
+                      _presetChip('提前30分', () {
+                        final newStart = _addMinutes(startStr, -30);
+                        final newEnd = _addMinutes(endStr, -30);
+                        startStr = newStart;
+                        endStr = newEnd;
+                        setSheetState(() {});
+                      }),
+                      _presetChip('推迟30分', () {
+                        final newStart = _addMinutes(startStr, 30);
+                        final newEnd = _addMinutes(endStr, 30);
+                        startStr = newStart;
+                        endStr = newEnd;
+                        setSheetState(() {});
+                      }),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        final newPeriod = '$startStr-$endStr';
+                        if (newPeriod != period) {
+                          await context.read<EliteProvider>().updatePlanTime(date, period, newPeriod);
+                        }
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                      },
+                      child: Text('保存时间段 — $startStr-$endStr'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _addMinutes(String time, int minutes) {
+    final parts = time.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    final total = h * 60 + m + minutes;
+    final newH = ((total % 1440) + 1440) % 1440 ~/ 60;
+    final newM = ((total % 1440) + 1440) % 1440 % 60;
+    return '${newH.toString().padLeft(2, '0')}:${newM.toString().padLeft(2, '0')}';
+  }
+
+  Widget _presetChip(String label, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppTheme.primary.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.primary)),
+      ),
+    );
+  }
+
   String _typeLabel(int t) {
     const m = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 0: '综合'};
     return m[t] ?? '综合';
@@ -1089,5 +1369,82 @@ class _NavChip extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// ---- Time Field Helper ----
+class _TimeField extends StatefulWidget {
+  final String label;
+  final String initial;
+  final ValueChanged<String> onChanged;
+  const _TimeField({required this.label, required this.initial, required this.onChanged});
+
+  @override
+  State<_TimeField> createState() => _TimeFieldState();
+}
+
+class _TimeFieldState extends State<_TimeField> {
+  late String _hour;
+  late String _minute;
+
+  @override
+  void initState() {
+    super.initState();
+    final parts = widget.initial.split(':');
+    _hour = parts.isNotEmpty ? parts[0] : '09';
+    _minute = parts.length > 1 ? parts[1] : '00';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.label, style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            _digitField(_hour, (v) {
+              _hour = v;
+              _notify();
+            }),
+            const Text(':', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+            _digitField(_minute, (v) {
+              _minute = v;
+              _notify();
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _digitField(String value, ValueChanged<String> onChanged) {
+    return SizedBox(
+      width: 52,
+      height: 44,
+      child: TextField(
+        controller: TextEditingController(text: value),
+        keyboardType: TextInputType.number,
+        maxLength: 2,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        decoration: const InputDecoration(
+          counterText: '',
+          border: OutlineInputBorder(),
+          contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        ),
+        onChanged: (v) {
+          final num = int.tryParse(v);
+          if (num != null && num >= 0 && num <= 59 && v.length <= 2) {
+            onChanged(v.padLeft(2, '0'));
+          }
+        },
+      ),
+    );
+  }
+
+  void _notify() {
+    widget.onChanged('$_hour:$_minute');
   }
 }

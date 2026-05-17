@@ -2,6 +2,26 @@
 
 ## 版本历史
 
+### v1.0.3 (2026-05-17)
+
+- **AI复盘日期选择**：日复盘支持选择指定日期生成报告（默认昨天），服务端 `generateReport` 新增 `date` 参数，周/月/年复盘以所选日期为参考
+- **健康信息保存修复**：体重、健康备注输入框补充焦点监听，失焦时自动保存；设置页退出时兜底保存
+- **拖拽手柄优化**：增大拖拽手柄尺寸（18→22px），proxyDecorator 简化为 Material 提升拖拽稳定性
+- **预设图标修复**：emoji 去除逻辑从无效正则改为已知图标列表匹配
+
+**相关文件：**
+- `lib/pages/report/report_page.dart` — 日复盘日期选择器
+- `lib/providers/report_provider.dart` — `generateReport()` 支持 date 参数
+- `lib/pages/settings/settings_page.dart` — 体重/健康备注焦点监听 + dispose 兜底保存
+- `lib/pages/home/home_page.dart` — 拖拽手柄优化、emoji 正则修复
+- 服务端：`AiReportController.java`, `AiPsychologicalReportServiceImpl.java` — 日期参数
+
+### v1.0.2 (2026-05-17)
+
+- **计划内容编辑**：首页今日规划支持直接点击内容或编辑图标修改计划文字，提供 12 个预设 emoji 图标
+- **时间段调整**：支持修改计划项的开始/结束时间，提供快捷预设（30分钟、1小时、提前/推迟30分钟）
+- **拖拽重排优化**：拖拽排序改为时间槽移位模式——中间所有项目的时间段自动滑动，而非简单交换
+
 ### v1.0.1 (2026-05-16)
 
 ---

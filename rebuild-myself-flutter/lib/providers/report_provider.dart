@@ -22,11 +22,13 @@ class ReportProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String?> generateReport(int cycleType) async {
+  Future<String?> generateReport(int cycleType, {String? date}) async {
     final api = ApiClient();
     if (!api.hasToken) return '请先登录';
     try {
-      final resp = await api.post('/report/generate', data: {'cycleType': cycleType});
+      final body = <String, dynamic>{'cycleType': cycleType};
+      if (date != null && date.isNotEmpty) body['date'] = date;
+      final resp = await api.post('/report/generate', data: body);
       if (resp.ok && resp.data != null) {
         final data = resp.data as Map<String, dynamic>;
         // Save to local DB

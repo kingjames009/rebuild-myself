@@ -10,6 +10,9 @@ class ReportPage extends StatefulWidget {
 }
 
 class _ReportPageState extends State<ReportPage> {
+  // Default to yesterday for daily review — makes more sense than today
+  DateTime _selectedDate = DateTime.now().subtract(const Duration(days: 1));
+
   @override
   void initState() {
     super.initState();
@@ -18,33 +21,85 @@ class _ReportPageState extends State<ReportPage> {
     });
   }
 
+  String _dateStr() =>
+      '${_selectedDate.year}-${_pad(_selectedDate.month)}-${_pad(_selectedDate.day)}';
+
   void _showGenerateDialog(int cycle) {
+    final isDaily = cycle == 1; // only daily report needs date selector
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${_cycleLabel(cycle)}复盘生成'),
-        content: const Text('AI将聚合你所有模块数据，生成结构化复盘报告：\n\n📊 数据总结\n🔍 问题诊断\n🎯 根源溯源\n💡 定制优化方案\n\n（需连接后端AI服务，可能需要几秒钟）'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final result = await context.read<ReportProvider>().generateReport(cycle);
-              if (context.mounted) {
-                if (result != null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('生成失败: $result'), backgroundColor: AppTheme.danger),
-                  );
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('AI复盘报告已生成')),
-                  );
-                }
-              }
-            },
-            child: const Text('生成报告'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('${_cycleLabel(cycle)}复盘生成'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('AI将聚合你所有模块数据，生成结构化复盘报告：\n\n📊 数据总结\n🔍 问题诊断\n🎯 根源溯源\n💡 定制优化方案\n\n（需连接后端AI服务，可能需要几秒钟）'),
+              if (isDaily) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('复盘日期：', style: TextStyle(fontSize: 14)),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: _selectedDate,
+                          firstDate: DateTime(2024, 1, 1),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          setState(() => _selectedDate = picked);
+                          setDialogState(() {});
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_dateStr(), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.primary)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.calendar_today, size: 14, color: AppTheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final result = await context.read<ReportProvider>().generateReport(
+                  cycle,
+                  date: cycle == 1 ? _dateStr() : null,
+                );
+                if (context.mounted) {
+                  if (result != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('生成失败: $result'), backgroundColor: AppTheme.danger),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('AI复盘报告已生成')),
+                    );
+                  }
+                }
+              },
+              child: const Text('生成报告'),
+            ),
+          ],
+        ),
       ),
     );
   }

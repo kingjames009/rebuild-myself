@@ -312,7 +312,9 @@ class EliteProvider extends ChangeNotifier {
     await loadAll();
   }
 
-  /// Swap time periods between two plans (for drag-to-reorder).
+  /// Shift time periods when user drags a plan to a new position.
+  /// Instead of swapping two items, all items between old and new index
+  /// shift their time periods one slot to make room.
   Future<void> reorderPlan(String date, int oldIndex, int newIndex) async {
     final todayPlans = _plans
         .where((p) => p.planDate == date)
@@ -322,19 +324,62 @@ class EliteProvider extends ChangeNotifier {
     if (newIndex < 0 || newIndex >= todayPlans.length) return;
     if (oldIndex == newIndex) return;
 
-    final oldPlan = todayPlans[oldIndex];
-    final newPlan = todayPlans[newIndex];
-    final oldPeriod = oldPlan.timePeriod;
-    final newPeriod = newPlan.timePeriod;
+    // Collect all time periods in sorted order
+    final periods = todayPlans.map((p) => p.timePeriod ?? '').toList();
+    // Remove the dragged item's period from its old position
+    final draggedPeriod = periods.removeAt(oldIndex);
+    // Insert it at the new position — all items in between shift one slot
+    periods.insert(newIndex, draggedPeriod);
 
     final db = await DatabaseHelper().db;
-    await db.update('daily_model_plan',
-        {'timePeriod': newPeriod, 'time_period': newPeriod},
-        where: 'planId = ?', whereArgs: [oldPlan.planId]);
-    await db.update('daily_model_plan',
-        {'timePeriod': oldPeriod, 'time_period': oldPeriod},
-        where: 'planId = ?', whereArgs: [newPlan.planId]);
+    for (int i = 0; i < todayPlans.length; i++) {
+      final plan = todayPlans[i];
+      final newPeriod = periods[i];
+      if (plan.timePeriod != newPeriod) {
+        await db.update('daily_model_plan',
+            {'timePeriod': newPeriod, 'time_period': newPeriod},
+            where: 'planId = ?', whereArgs: [plan.planId]);
+      }
+    }
 
+    await loadAll();
+  }
+
+  /// Update the planContent of an existing plan item.
+  Future<void> updatePlanContent(String planDate, String timePeriod, String newContent) async {
+    final db = await DatabaseHelper().db;
+    await db.update('daily_model_plan', {
+      'planContent': newContent,
+    }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [planDate, timePeriod]);
+
+    final api = ApiClient();
+    if (api.hasToken) {
+      await api.put('/plan/content', data: {
+        'planDate': planDate,
+        'timePeriod': timePeriod,
+        'planContent': newContent,
+      });
+    }
+    await loadAll();
+  }
+
+  /// Update the time period of an existing plan item (user drag-adjusts time).
+  Future<void> updatePlanTime(String planDate, String oldTimePeriod, String newTimePeriod) async {
+    if (oldTimePeriod == newTimePeriod) return;
+    final db = await DatabaseHelper().db;
+    await db.update('daily_model_plan', {
+      'timePeriod': newTimePeriod,
+      'time_period': newTimePeriod,
+    }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [planDate, oldTimePeriod]);
+
+    final api = ApiClient();
+    if (api.hasToken) {
+      await api.put('/plan/time', data: {
+        'planDate': planDate,
+        'oldTimePeriod': oldTimePeriod,
+        'newTimePeriod': newTimePeriod,
+      });
+    }
     await loadAll();
   }
 
