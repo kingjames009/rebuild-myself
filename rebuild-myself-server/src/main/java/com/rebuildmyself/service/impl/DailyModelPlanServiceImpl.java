@@ -77,10 +77,13 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
     public List<DailyModelPlan> generateTodayPlan(Long userId) {
         LocalDate today = LocalDate.now();
 
-        // Clear existing plans for today before regenerating
-        remove(new LambdaQueryWrapper<DailyModelPlan>()
+        // One plan per user per day: return existing plans if already generated
+        List<DailyModelPlan> existing = list(new LambdaQueryWrapper<DailyModelPlan>()
                 .eq(DailyModelPlan::getUserId, userId)
                 .eq(DailyModelPlan::getPlanDate, today));
+        if (!existing.isEmpty()) {
+            return existing;
+        }
 
         boolean workday = isWorkday(today);
         List<EliteHabitLib> habits = eliteHabitLibMapper.selectList(null);
