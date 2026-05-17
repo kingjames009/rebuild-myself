@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -47,6 +48,13 @@ public class DailyModelPlanController {
         return Result.ok();
     }
 
+    @DeleteMapping("/date/{date}")
+    public Result<?> removeByDate(@PathVariable String date,
+                                  @RequestAttribute("userId") Long userId) {
+        int count = dailyModelPlanService.deleteByUserAndDate(userId, LocalDate.parse(date));
+        return Result.ok(Map.of("deleted", count));
+    }
+
     @PutMapping("/note")
     public Result<?> updateNote(@RequestBody Map<String, String> body,
                                 @RequestAttribute("userId") Long userId) {
@@ -59,5 +67,13 @@ public class DailyModelPlanController {
         DailyModelPlan updated = dailyModelPlanService.updateNote(
                 userId, LocalDate.parse(planDate), timePeriod, actualNote);
         return updated != null ? Result.ok(updated) : Result.fail(404, "Plan not found");
+    }
+
+    @PutMapping("/date/{date}")
+    public Result<?> replaceByDate(@PathVariable String date,
+                                   @RequestBody List<DailyModelPlan> plans,
+                                   @RequestAttribute("userId") Long userId) {
+        dailyModelPlanService.replaceByUserAndDate(userId, LocalDate.parse(date), plans);
+        return Result.ok();
     }
 }

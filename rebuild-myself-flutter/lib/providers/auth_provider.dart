@@ -153,4 +153,13 @@ class AuthProvider extends ChangeNotifier {
     _privacyLocked = false;
     notifyListeners();
   }
+
+  Future<String?> changePassword(String oldPwd, String newPwd) async {
+    final resp = await ApiClient().post('/user/change-password', data: {
+      'oldPassword': oldPwd,
+      'newPassword': newPwd,
+    });
+    if (resp.ok) return null;
+    return resp.msg ?? '修改失败';
+  }
 }

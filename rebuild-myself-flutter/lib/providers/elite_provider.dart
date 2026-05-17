@@ -342,8 +342,13 @@ class EliteProvider extends ChangeNotifier {
   }
 
   /// Shift time periods when user drags a plan to a new position.
-  /// Instead of swapping two items, all items between old and new index
-  /// shift their time periods one slot to make room.
+  /// Items between oldIndex and newIndex shift one slot toward the dragged item's
+  /// original position; the dragged item takes the far end's time period.
+  ///
+  /// Example — drag item 0 to position 3:
+  ///   P0→P3 (dragged), P1→P0, P2→P1, P3→P2 (items 1-3 shift up)
+  /// Example — drag item 3 to position 0:
+  ///   P3→P0 (dragged), P2→P3, P1→P2, P0→P1 (items 0-2 shift down)
   Future<void> reorderPlan(String date, int oldIndex, int newIndex) async {
     final todayPlans = _plans
         .where((p) => p.planDate == date)
@@ -353,27 +358,61 @@ class EliteProvider extends ChangeNotifier {
     if (newIndex < 0 || newIndex >= todayPlans.length) return;
     if (oldIndex == newIndex) return;
 
-    // Collect all time periods in sorted order
     final periods = todayPlans.map((p) => p.timePeriod ?? '').toList();
-    // Remove the dragged item's period from its old position
-    final draggedPeriod = periods.removeAt(oldIndex);
-    // Insert it at the new position — all items in between shift one slot
-    periods.insert(newIndex, draggedPeriod);
 
-    final db = await DatabaseHelper().db;
-    for (int i = 0; i < todayPlans.length; i++) {
-      final plan = todayPlans[i];
-      final newPeriod = periods[i];
-      final oldPeriod = plan.timePeriod ?? '';
-      if (oldPeriod != newPeriod) {
-        // Use planDate + old timePeriod to locate the row — planId may be null
-        await db.update('daily_model_plan',
-            {'timePeriod': newPeriod, 'time_period': newPeriod},
-            where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, oldPeriod]);
+    // Build oldPeriod → newPeriod mapping
+    final changes = <String, String>{};
+
+    if (oldIndex < newIndex) {
+      // Drag down: items oldIndex+1..newIndex shift UP by one slot each
+      for (int i = oldIndex + 1; i <= newIndex; i++) {
+        changes[periods[i]] = periods[i - 1];
       }
+      // Dragged item takes the target position's period
+      changes[periods[oldIndex]] = periods[newIndex];
+    } else {
+      // Drag up: items newIndex..oldIndex-1 shift DOWN by one slot each
+      for (int i = newIndex; i < oldIndex; i++) {
+        changes[periods[i]] = periods[i + 1];
+      }
+      // Dragged item takes the target position's period
+      changes[periods[oldIndex]] = periods[newIndex];
     }
 
-    await loadAll();
+    if (changes.isEmpty) return;
+
+    final db = await DatabaseHelper().db;
+
+    // Phase 1: move all affected rows to temp values (avoid key collision)
+    int idx = 0;
+    for (final oldPeriod in changes.keys) {
+      await db.update('daily_model_plan',
+          {'timePeriod': '__reorder_$idx', 'time_period': '__reorder_$idx'},
+          where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, oldPeriod]);
+      idx++;
+    }
+
+    // Phase 2: move from temp to final
+    idx = 0;
+    for (final entry in changes.entries) {
+      await db.update('daily_model_plan',
+          {'timePeriod': entry.value, 'time_period': entry.value},
+          where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, '__reorder_$idx']);
+      idx++;
+    }
+
+    // Update in-memory
+    for (int i = 0; i < _plans.length; i++) {
+      final oldPeriod = _plans[i].timePeriod ?? '';
+      final newPeriod = changes[oldPeriod];
+      if (newPeriod != null) {
+        _plans[i] = _plans[i].copyWith(timePeriod: newPeriod);
+      }
+    }
+    _plans.sort((a, b) => (a.timePeriod ?? '').compareTo(b.timePeriod ?? ''));
+
+    Future.microtask(() => notifyListeners());
+    await _syncPlansForDate(date);
   }
 
   /// Update the planContent of an existing plan item.
@@ -382,16 +421,15 @@ class EliteProvider extends ChangeNotifier {
     await db.update('daily_model_plan', {
       'planContent': newContent,
     }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [planDate, timePeriod]);
-
-    final api = ApiClient();
-    if (api.hasToken) {
-      await api.put('/plan/content', data: {
-        'planDate': planDate,
-        'timePeriod': timePeriod,
-        'planContent': newContent,
-      });
+    // Update in-memory
+    for (int i = 0; i < _plans.length; i++) {
+      if (_plans[i].planDate == planDate && _plans[i].timePeriod == timePeriod) {
+        _plans[i] = _plans[i].copyWith(planContent: newContent);
+        break;
+      }
     }
-    await loadAll();
+    notifyListeners();
+    await _syncPlansForDate(planDate);
   }
 
   /// Update the time period of an existing plan item (user drag-adjusts time).
@@ -402,16 +440,16 @@ class EliteProvider extends ChangeNotifier {
       'timePeriod': newTimePeriod,
       'time_period': newTimePeriod,
     }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [planDate, oldTimePeriod]);
-
-    final api = ApiClient();
-    if (api.hasToken) {
-      await api.put('/plan/time', data: {
-        'planDate': planDate,
-        'oldTimePeriod': oldTimePeriod,
-        'newTimePeriod': newTimePeriod,
-      });
+    // Update in-memory
+    for (int i = 0; i < _plans.length; i++) {
+      if (_plans[i].planDate == planDate && _plans[i].timePeriod == oldTimePeriod) {
+        _plans[i] = _plans[i].copyWith(timePeriod: newTimePeriod);
+        break;
+      }
     }
-    await loadAll();
+    _plans.sort((a, b) => (a.timePeriod ?? '').compareTo(b.timePeriod ?? ''));
+    notifyListeners();
+    await _syncPlansForDate(planDate);
   }
 
   /// Push today's generated plans to server immediately.
@@ -432,10 +470,51 @@ class EliteProvider extends ChangeNotifier {
     }
   }
 
+  /// Sync all local plans for a given date to server (batch replace).
+  Future<void> _syncPlansForDate(String date) async {
+    final api = ApiClient();
+    if (!api.hasToken) return;
+    final db = await DatabaseHelper().db;
+    final allRows = await db.query('daily_model_plan');
+    final datePlans = allRows.where((r) {
+      final d = r['planDate'] ?? r['plan_date'] ?? '';
+      return d.toString() == date;
+    }).toList();
+    if (datePlans.isEmpty) return;
+    // Convert to server format
+    final body = datePlans.map((r) {
+      final out = <String, dynamic>{};
+      out['timePeriod'] = r['timePeriod'] ?? r['time_period'] ?? '';
+      out['planContent'] = r['planContent'] ?? r['plan_content'] ?? '';
+      out['planType'] = r['planType'] ?? r['plan_type'] ?? 0;
+      out['difficulty'] = r['difficulty'] ?? 2;
+      out['actualNote'] = r['actualNote'] ?? r['actual_note'] ?? '';
+      out['isCompleted'] = r['isCompleted'] ?? r['is_completed'] ?? 0;
+      return out;
+    }).toList();
+    final resp = await api.put('/plan/date/$date', data: body);
+    if (resp.ok) {
+      for (final r in datePlans) {
+        final id = r['planId'] ?? r['plan_id'];
+        if (id != null) {
+          await db.update('daily_model_plan', {'synced': 1}, where: 'planId = ?', whereArgs: [id]);
+        }
+      }
+    }
+  }
+
   Future<void> clearPlansForDate(String date) async {
+    // Delete from local DB
     final db = await DatabaseHelper().db;
     await db.delete('daily_model_plan', where: 'planDate = ?', whereArgs: [date]);
     await db.delete('daily_model_plan', where: 'plan_date = ?', whereArgs: [date]);
+    // Delete from server
+    final api = ApiClient();
+    if (api.hasToken) {
+      try {
+        await api.delete('/plan/date/$date');
+      } catch (_) {}
+    }
     await loadAll();
   }
 
@@ -535,6 +614,7 @@ class EliteProvider extends ChangeNotifier {
 
     // Single reload at the end
     await loadAll();
+    await _syncPlansForDate(date);
     return generated.length;
   }
 

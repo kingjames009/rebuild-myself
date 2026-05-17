@@ -13,4 +13,8 @@ public interface DailyModelPlanService extends IService<DailyModelPlan> {
     List<DailyModelPlan> generateTodayPlan(Long userId);
 
     DailyModelPlan updateNote(Long userId, LocalDate planDate, String timePeriod, String actualNote);
+
+    int deleteByUserAndDate(Long userId, LocalDate date);
+
+    void replaceByUserAndDate(Long userId, LocalDate date, List<DailyModelPlan> plans);
 }

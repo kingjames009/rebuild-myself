@@ -30,14 +30,13 @@ class TokenStore {
     try {
       final raw = html.window.localStorage[_credsKey];
       if (raw != null && raw.isNotEmpty) {
-        final parts = raw.split(':');
-        if (parts.length == 2) return {'phone': parts[0], 'pwd': parts[1]};
+        return {'pwd': raw};
       }
     } catch (_) {}
     return null;
   }
 
-  Future<void> saveCreds(String phone, String pwd) async {
-    html.window.localStorage[_credsKey] = '$phone:$pwd';
+  Future<void> saveCreds(String pwd) async {
+    html.window.localStorage[_credsKey] = pwd;
   }
 }

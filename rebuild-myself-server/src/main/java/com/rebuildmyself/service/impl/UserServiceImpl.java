@@ -12,11 +12,16 @@ import com.rebuildmyself.service.UserService;
 import com.rebuildmyself.service.impl.LifeEssentialConfigServiceImpl;
 import com.rebuildmyself.util.AESUtil;
 import com.rebuildmyself.util.JwtUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +32,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final AESUtil aesUtil;
     private final LifeEssentialConfigMapper lifeEssentialConfigMapper;
 
+    @Value("${app.phone-secret}")
+    private String phoneSecret;
+
     public UserServiceImpl(JwtUtil jwtUtil, AESUtil aesUtil,
                           LifeEssentialConfigMapper lifeEssentialConfigMapper) {
         this.jwtUtil = jwtUtil;
@@ -34,9 +42,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         this.lifeEssentialConfigMapper = lifeEssentialConfigMapper;
     }
 
+    private String hashPhone(String phone) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            SecretKeySpec keySpec = new SecretKeySpec(
+                    phoneSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+            mac.init(keySpec);
+            byte[] hash = mac.doFinal(phone.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (Exception e) {
+            throw new RuntimeException("Phone hashing failed", e);
+        }
+    }
+
     @Override
     public String login(String phone, String password) {
-        User user = getOne(new LambdaQueryWrapper<User>().eq(User::getPhone, phone));
+        String hashedPhone = hashPhone(phone);
+        User user = getOne(new LambdaQueryWrapper<User>().eq(User::getPhone, hashedPhone));
         if (user == null) throw new BusinessException("账号不存在");
         if (!SecureUtil.sha256(password).equals(user.getPassword())) throw new BusinessException("密码错误");
         user.setLastLoginTime(LocalDateTime.now());
@@ -46,10 +68,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public User register(String phone, String password, String code) {
-        if (getOne(new LambdaQueryWrapper<User>().eq(User::getPhone, phone)) != null)
+        String hashedPhone = hashPhone(phone);
+        if (getOne(new LambdaQueryWrapper<User>().eq(User::getPhone, hashedPhone)) != null)
             throw new BusinessException("手机号已注册");
         User user = new User();
-        user.setPhone(phone);
+        user.setPhone(hashedPhone);
         user.setPassword(SecureUtil.sha256(password));
         save(user);
         // Seed default life essentials for new user
@@ -57,6 +80,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         for (LifeEssentialConfig e : defaults) {
             lifeEssentialConfigMapper.insert(e);
         }
+        // Don't expose the hashed phone to client
+        user.setPhone(null);
         return user;
     }
 
@@ -106,6 +131,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     public void setLockPwd(Long userId, String lockPwd) {
         User user = getById(userId);
         user.setLocalLockPwd(SecureUtil.sha256(lockPwd));
+        updateById(user);
+    }
+
+    @Override
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = getById(userId);
+        if (user == null) throw new BusinessException("用户不存在");
+        if (!SecureUtil.sha256(oldPassword).equals(user.getPassword()))
+            throw new BusinessException("原密码错误");
+        user.setPassword(SecureUtil.sha256(newPassword));
         updateById(user);
     }
 

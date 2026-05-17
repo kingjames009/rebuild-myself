@@ -31,7 +31,7 @@ class _RegisterPageState extends State<RegisterPage> {
       // Auto-login after registration
       final loginOk = await auth.login(phone, pwd);
       if (loginOk && mounted) {
-        await TokenStore().saveCreds(phone, pwd);
+        await TokenStore().saveCreds(pwd);
         if (mounted) {
           Navigator.pushAndRemoveUntil(
             context,

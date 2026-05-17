@@ -16,5 +16,7 @@ public interface UserService extends IService<User> {
 
     void setLockPwd(Long userId, String lockPwd);
 
+    void changePassword(Long userId, String oldPassword, String newPassword);
+
     void deleteAccount(Long userId);
 }

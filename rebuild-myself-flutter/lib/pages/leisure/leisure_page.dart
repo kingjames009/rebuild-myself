@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/leisure.dart';
 import '../../providers/leisure_provider.dart';
+import '../../utils/dialogs.dart';
 
 class LeisurePage extends StatefulWidget {
   const LeisurePage({super.key});
@@ -197,7 +198,11 @@ class _LeisurePageState extends State<LeisurePage> {
                                     : (r.happyScore ?? 0) >= 4 ? AppTheme.warning : AppTheme.danger)),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: () => context.read<LeisureProvider>().delete(r.id!),
+                          onTap: () async {
+  if (await showDeleteConfirm(context, item: '该休闲记录')) {
+    context.read<LeisureProvider>().delete(r.id!);
+  }
+},
                           child: const Icon(Icons.delete_outline, size: 16, color: AppTheme.textMuted),
                         ),
                       ]),

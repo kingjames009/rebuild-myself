@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/behavior.dart';
 import '../../providers/intervene_provider.dart';
+import '../../utils/dialogs.dart';
 
 class IntervenePage extends StatefulWidget {
   const IntervenePage({super.key});
@@ -269,7 +270,11 @@ class _IntervenePageState extends State<IntervenePage> {
                             style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline, size: 18),
-                            onPressed: () => context.read<InterveneProvider>().delete(r.interveneId!),
+                            onPressed: () async {
+                              if (await showDeleteConfirm(context, item: '该干预记录')) {
+                                context.read<InterveneProvider>().delete(r.interveneId!);
+                              }
+                            },
                           ),
                         ),
                       )),

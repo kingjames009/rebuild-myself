@@ -6,6 +6,7 @@ import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_client.dart';
+import '../../services/sync_service.dart';
 import '../auth/login_page.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -200,25 +201,90 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   void _changePassword() {
+    final oldCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('修改密码'),
-        content: const Text('将跳转至密码修改页面'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: oldCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: '原密码', prefixIcon: Icon(Icons.lock_outline, size: 20)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: '新密码（至少6位）', prefixIcon: Icon(Icons.lock, size: 20)),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(hintText: '确认新密码', prefixIcon: Icon(Icons.lock, size: 20)),
+            ),
+          ],
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-          ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('确定')),
+          ElevatedButton(
+            onPressed: () async {
+              final old = oldCtrl.text;
+              final nue = newCtrl.text;
+              final confirm = confirmCtrl.text;
+              if (old.isEmpty || nue.isEmpty || confirm.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请填写完整')));
+                return;
+              }
+              if (nue.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('新密码至少6位')));
+                return;
+              }
+              if (nue != confirm) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('两次新密码不一致')));
+                return;
+              }
+              final err = await context.read<AuthProvider>().changePassword(old, nue);
+              if (!ctx.mounted) return;
+              if (err != null) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: AppTheme.danger));
+              } else {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('密码修改成功')));
+              }
+            },
+            child: const Text('确定'),
+          ),
         ],
       ),
     );
   }
 
-  void _syncData() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('同步成功')));
+  Future<void> _syncData() async {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在同步...'), duration: Duration(seconds: 1)));
+    await SyncService().syncAll();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('同步完成')));
   }
 
-  void _exportData() {
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('导出成功')));
+  Future<void> _exportData() async {
+    final api = ApiClient();
+    if (!api.hasToken) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('请先登录'), backgroundColor: AppTheme.danger));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('正在导出...'), duration: Duration(seconds: 1)));
+    final resp = await api.get('/sync/export');
+    if (resp.ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('数据已同步导出到服务器')));
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('导出失败: ${resp.msg ?? "请重试"}'), backgroundColor: AppTheme.danger));
+    }
   }
 
   void _viewReports() {

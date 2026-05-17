@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../providers/report_provider.dart';
+import '../../utils/dialogs.dart';
 
 class ReportPage extends StatefulWidget {
   const ReportPage({super.key});
@@ -205,7 +206,11 @@ class _ReportList extends StatelessWidget {
                         Text(r.createTime?.substring(0, 10) ?? '', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                         IconButton(
                           icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
-                          onPressed: () => provider.delete(r.reportId!),
+                          onPressed: () async {
+                            if (await showDeleteConfirm(context, item: '该报告')) {
+                              provider.delete(r.reportId!);
+                            }
+                          },
                         ),
                       ]),
                       const SizedBox(height: 10),

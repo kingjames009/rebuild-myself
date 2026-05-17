@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/sideline.dart';
 import '../../providers/sideline_provider.dart';
+import '../../utils/dialogs.dart';
 
 class SidelinePage extends StatefulWidget {
   const SidelinePage({super.key});
@@ -203,7 +204,11 @@ class _SidelinePageState extends State<SidelinePage> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 16),
-                            onPressed: () => context.read<SidelineProvider>().delete(r.id!),
+                            onPressed: () async {
+                            if (await showDeleteConfirm(context, item: '该副业记录')) {
+                              context.read<SidelineProvider>().delete(r.id!);
+                            }
+                          },
                             padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           ),
                         ],

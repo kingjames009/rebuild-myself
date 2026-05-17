@@ -17,5 +17,8 @@ jwt:
 ai:
   api-key: ${AI_API_KEY:sk-local-dev-placeholder}
 
+app:
+  phone-secret: dev-phone-secret-for-local-use-only
+
 file:
   upload-path: ./uploads

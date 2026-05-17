@@ -54,22 +54,20 @@ class TokenStore {
       final file = File(await _path);
       if (await file.exists()) {
         final data = json.decode(await file.readAsString());
-        final phone = data['phone'] as String?;
         final pwd = data['pwd'] as String?;
-        if (phone != null && pwd != null) return {'phone': phone, 'pwd': pwd};
+        if (pwd != null) return {'pwd': pwd};
       }
     } catch (_) {}
     return null;
   }
 
-  Future<void> saveCreds(String phone, String pwd) async {
+  Future<void> saveCreds(String pwd) async {
     try {
       final file = File(await _path);
       Map<String, dynamic> data = {};
       if (await file.exists()) {
         data = json.decode(await file.readAsString());
       }
-      data['phone'] = phone;
       data['pwd'] = pwd;
       await file.writeAsString(json.encode(data));
     } catch (_) {}

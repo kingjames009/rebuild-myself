@@ -6,6 +6,7 @@ import '../../models/daily_check.dart';
 import '../../models/time_block.dart';
 import '../../models/custom_priority.dart';
 import '../../providers/elite_provider.dart';
+import '../../utils/dialogs.dart';
 import '../../providers/goal_provider.dart';
 import '../../providers/aspiration_provider.dart';
 
@@ -684,7 +685,11 @@ class _ElitePageState extends State<ElitePage> {
                                 child: Text(item.content,
                                     style: const TextStyle(fontSize: 13))),
                             GestureDetector(
-                              onTap: () => p.deleteCustomItem(item.id!),
+                              onTap: () async {
+                                if (await showDeleteConfirm(context, item: '该自定义事项')) {
+                                  p.deleteCustomItem(item.id!);
+                                }
+                              },
                               child: const Icon(Icons.close,
                                   size: 16, color: AppTheme.textMuted),
                             ),

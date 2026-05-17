@@ -5,6 +5,8 @@ class TaskTodo {
   final int? taskLevel;
   int? isComplete;
   final String? taskDate;
+  final int? goalId;
+  final String? goalTitle;
   final String? createTime;
 
   TaskTodo({
@@ -14,6 +16,8 @@ class TaskTodo {
     this.taskLevel,
     this.isComplete,
     this.taskDate,
+    this.goalId,
+    this.goalTitle,
     this.createTime,
   });
 
@@ -31,6 +35,8 @@ class TaskTodo {
       taskLevel: parseInt(json['taskLevel'] ?? json['task_level']),
       isComplete: parseInt(json['isComplete'] ?? json['is_complete']),
       taskDate: (json['taskDate'] ?? json['task_date'])?.toString(),
+      goalId: parseInt(json['goalId'] ?? json['goal_id']),
+      goalTitle: (json['goalTitle'] ?? json['goal_title'])?.toString(),
       createTime: (json['createTime'] ?? json['create_time'])?.toString(),
     );
   }
@@ -41,6 +47,7 @@ class TaskTodo {
         if (taskLevel != null) 'taskLevel': taskLevel,
         if (isComplete != null) 'isComplete': isComplete,
         if (taskDate != null) 'taskDate': taskDate,
+        if (goalId != null) 'goalId': goalId,
       };
 
   String get levelLabel {

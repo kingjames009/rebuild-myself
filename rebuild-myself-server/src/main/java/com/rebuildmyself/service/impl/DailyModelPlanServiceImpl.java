@@ -69,6 +69,14 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
         return this.list(wrapper);
     }
 
+    @Override
+    public int deleteByUserAndDate(Long userId, LocalDate date) {
+        LambdaQueryWrapper<DailyModelPlan> wrapper = new LambdaQueryWrapper<DailyModelPlan>()
+                .eq(DailyModelPlan::getUserId, userId)
+                .eq(DailyModelPlan::getPlanDate, date);
+        return this.baseMapper.delete(wrapper);
+    }
+
     private boolean isWorkday(LocalDate date) {
         return HolidayUtil.isWorkday(date);
     }
@@ -400,6 +408,22 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
             if (text.contains(kw)) return true;
         }
         return false;
+    }
+
+    @Override
+    public void replaceByUserAndDate(Long userId, LocalDate date, List<DailyModelPlan> plans) {
+        // Delete all existing plans for this user + date
+        deleteByUserAndDate(userId, date);
+        // Insert the new plans
+        LocalDateTime now = LocalDateTime.now();
+        for (DailyModelPlan plan : plans) {
+            plan.setUserId(userId);
+            plan.setPlanDate(date);
+            if (plan.getCreateTime() == null) plan.setCreateTime(now);
+        }
+        if (!plans.isEmpty()) {
+            this.saveBatch(plans);
+        }
     }
 
     @Override

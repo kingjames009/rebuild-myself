@@ -10,6 +10,8 @@ import '../../providers/elite_provider.dart';
 import '../../providers/study_provider.dart';
 import '../../providers/focus_timer_provider.dart';
 import '../../models/daily_plan.dart';
+import '../../models/goal.dart';
+import '../../models/task.dart';
 import '../../services/sync_service.dart';
 import '../../services/api_client.dart';
 import '../../services/database_helper.dart';
@@ -22,12 +24,15 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  bool _onboardingShown = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await SyncService().syncAll();
-      _loadData();
+      await _loadData();
+      if (mounted) _checkOnboarding();
     });
   }
 
@@ -35,46 +40,191 @@ class _HomePageState extends State<HomePage> {
     final now = DateTime.now();
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
+    // Step 1: Check server FIRST for today's plans, before any local state could interfere
+    bool serverHasPlans = false;
+    final api = ApiClient();
+    if (api.hasToken) {
+      try {
+        final resp = await api.get('/plan/date/$dateStr');
+        if (resp.ok && resp.data is List && (resp.data as List).isNotEmpty) {
+          serverHasPlans = true;
+          final db = await DatabaseHelper().db;
+          // Clean local today plans then pull from server
+          await db.delete('daily_model_plan', where: 'planDate = ?', whereArgs: [dateStr]);
+          await db.delete('daily_model_plan', where: 'plan_date = ?', whereArgs: [dateStr]);
+          for (final item in resp.data) {
+            if (item is! Map) continue;
+            final plan = DailyModelPlan.fromJson(Map<String, dynamic>.from(item));
+            final data = plan.toJson();
+            data['synced'] = 1;
+            await db.insert('daily_model_plan', data);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Step 2: Load other data
     await context.read<GoalProvider>().loadAll();
     await context.read<RecordProvider>().loadByDate(dateStr);
     await context.read<FinanceProvider>().loadAll();
     final elite = context.read<EliteProvider>();
     await elite.loadAll();
 
-    // Auto-generate today's plan only if no plans exist locally AND on server
+    // Step 3: Only generate if neither local nor server has today's plans
     final todayPlans = elite.plans.where((p) => p.planDate == dateStr).toList();
-    if (todayPlans.isEmpty) {
-      // Check server first — don't regenerate if plans already exist
-      final api = ApiClient();
-      bool serverHasPlans = false;
-      if (api.hasToken) {
-        try {
-          final resp = await api.get('/plan/date/$dateStr');
-          if (resp.ok && resp.data is List && (resp.data as List).isNotEmpty) {
-            serverHasPlans = true;
-            // Pull server plans into local storage
-            final db = await DatabaseHelper().db;
-            await db.delete('daily_model_plan', where: 'planDate = ?', whereArgs: [dateStr]);
-            await db.delete('daily_model_plan', where: 'plan_date = ?', whereArgs: [dateStr]);
-            for (final item in resp.data) {
-              if (item is! Map) continue;
-              final plan = DailyModelPlan.fromJson(Map<String, dynamic>.from(item));
-              final data = plan.toJson();
-              data['synced'] = 1;
-              await db.insert('daily_model_plan', data);
-            }
-            await elite.loadAll();
-          }
-        } catch (_) {}
-      }
-      if (!serverHasPlans) {
-        final goalProv = context.read<GoalProvider>();
-        final todayTasks = goalProv.tasks
-            .where((t) => t.taskDate == dateStr && t.isComplete != 1)
-            .toList();
-        await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
-      }
+    if (todayPlans.isEmpty && !serverHasPlans) {
+      final goalProv = context.read<GoalProvider>();
+      final todayTasks = goalProv.tasks
+          .where((t) => t.taskDate == dateStr && t.isComplete != 1)
+          .toList();
+      await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
     }
+  }
+
+  void _checkOnboarding() {
+    if (_onboardingShown) return;
+    final goalProv = context.read<GoalProvider>();
+    if (goalProv.goals.isNotEmpty) return;
+    _onboardingShown = true;
+    _showGoalOnboarding();
+  }
+
+  void _showGoalOnboarding() {
+    final ctrl = TextEditingController();
+    String? targetDate; // null = permanent
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      isDismissible: false,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('设定你的目标', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  const Text('请输入你想达成的目标，每行一个', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      hintText: '例：\n每天学习英语30分钟\n坚持跑步3公里\n阅读10本书',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Target date row
+                  Row(
+                    children: [
+                      const Text('到期时间：', style: TextStyle(fontSize: 13)),
+                      GestureDetector(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: ctx,
+                            initialDate: DateTime.now().add(const Duration(days: 90)),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                          );
+                          if (picked != null) {
+                            targetDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+                            setSheetState(() {});
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                targetDate == null ? '永久' : targetDate!,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: targetDate == null ? AppTheme.textMuted : AppTheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              if (targetDate != null) ...[
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () {
+                                    targetDate = null;
+                                    setSheetState(() {});
+                                  },
+                                  child: const Icon(Icons.close, size: 14, color: AppTheme.textMuted),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          child: const Text('跳过'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            final text = ctrl.text.trim();
+                            Navigator.of(ctx).pop();
+                            if (text.isNotEmpty) {
+                              final lines = text.split('\n').where((l) => l.trim().isNotEmpty).toList();
+                              final today = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+                              final goalProv = context.read<GoalProvider>();
+                              for (final line in lines) {
+                                await goalProv.addGoal(Goal(
+                                  title: line.trim(),
+                                  goalLevel: 1,
+                                  goalType: 1,
+                                  status: 1,
+                                  startDate: today,
+                                  targetTime: targetDate,
+                                  progress: 0,
+                                ));
+                              }
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('已保存${lines.length}个目标')),
+                                );
+                              }
+                            }
+                          },
+                          child: const Text('保存'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _onRefresh() async {
@@ -317,7 +467,7 @@ class _HomePageState extends State<HomePage> {
                         final existingNote = p.actualNote;
                         final hasNote = existingNote != null && existingNote.isNotEmpty;
                         return Container(
-                          key: ValueKey(p.planId),
+                          key: ValueKey('${p.planDate}_${p.timePeriod}'),
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
@@ -1475,3 +1625,4 @@ class _TimeFieldState extends State<_TimeField> {
     widget.onChanged('$_hour:$_minute');
   }
 }
+

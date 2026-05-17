@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../config/shell.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/token_store.dart';
+import '../../services/phone_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -14,18 +15,64 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _phone = TextEditingController();
   final _pwd = TextEditingController();
+  bool _phonePermissionRequested = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCreds();
+    _loadCreds().then((_) => _tryAutoFillPhone());
   }
 
   Future<void> _loadCreds() async {
     final creds = await TokenStore().loadCreds();
     if (creds != null && mounted) {
-      _phone.text = creds['phone'] ?? '';
       _pwd.text = creds['pwd'] ?? '';
+    }
+  }
+
+  Future<void> _tryAutoFillPhone() async {
+    // Don't request if phone is already filled from saved creds
+    if (_phone.text.isNotEmpty) return;
+    if (_phonePermissionRequested) return;
+    _phonePermissionRequested = true;
+
+    final hasPermission = await PhoneService.hasPermission();
+    if (!hasPermission) {
+      if (!mounted) return;
+      // Show rationale dialog before system permission request
+      final granted = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('自动填充手机号'),
+          content: const Text('允许「精进」读取本机号码，以便快速登录？\n\n不会泄露您的隐私信息。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('拒绝'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('允许'),
+            ),
+          ],
+        ),
+      );
+      if (granted != true) return;
+      await PhoneService.requestPermission();
+      // Wait a moment for the system permission dialog to return
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    var raw = await PhoneService.getPhoneNumber();
+    if (raw != null && raw.isNotEmpty && mounted) {
+      // Strip +86 / 86 prefix from SIM card number
+      String phone = raw.trim();
+      if (phone.startsWith('+86')) {
+        phone = phone.substring(3);
+      } else if (phone.startsWith('86') && phone.length == 13) {
+        phone = phone.substring(2);
+      }
+      setState(() => _phone.text = phone);
     }
   }
 
@@ -42,7 +89,7 @@ class _LoginPageState extends State<LoginPage> {
     final pwd = _pwd.text;
     final ok = await auth.login(phone, pwd);
     if (ok && mounted) {
-      await TokenStore().saveCreds(phone, pwd);
+      await TokenStore().saveCreds(pwd);
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,

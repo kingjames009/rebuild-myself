@@ -35,6 +35,9 @@ ai:
   api-key: ${AI_API_KEY:CHANGEME_IN_ENV_FILE}
   model: deepseek-chat
 
+app:
+  phone-secret: ${PHONE_SECRET:CHANGEME_IN_ENV_FILE}
+
 file:
   upload-path: /data/rebuild-myself/uploads
   max-size: 10MB

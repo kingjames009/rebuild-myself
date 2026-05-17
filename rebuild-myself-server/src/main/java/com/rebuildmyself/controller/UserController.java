@@ -1,11 +1,14 @@
 package com.rebuildmyself.controller;
 
+import com.rebuildmyself.common.BusinessException;
 import com.rebuildmyself.common.Result;
 import com.rebuildmyself.entity.User;
 import com.rebuildmyself.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/user")
@@ -31,7 +34,9 @@ public class UserController {
     @GetMapping("/profile")
     public Result<User> getProfile(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
-        return Result.ok(userService.getById(userId));
+        User user = userService.getById(userId);
+        if (user != null) user.setPhone(null); // never expose phone hash
+        return Result.ok(user);
     }
 
     @PutMapping("/profile")
@@ -60,6 +65,21 @@ public class UserController {
     public Result<Void> deleteAccount(HttpServletRequest request) {
         Long userId = (Long) request.getAttribute("userId");
         userService.deleteAccount(userId);
+        return Result.ok();
+    }
+
+    @PostMapping("/change-password")
+    public Result<Void> changePassword(@RequestBody Map<String, String> body,
+                                       HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        String oldPassword = body.get("oldPassword");
+        String newPassword = body.get("newPassword");
+        if (oldPassword == null || oldPassword.isBlank()
+                || newPassword == null || newPassword.isBlank()) {
+            throw new BusinessException("密码不能为空");
+        }
+        if (newPassword.length() < 6) throw new BusinessException("新密码至少6位");
+        userService.changePassword(userId, oldPassword, newPassword);
         return Result.ok();
     }
 }

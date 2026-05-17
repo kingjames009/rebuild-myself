@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/study.dart';
 import '../../providers/study_provider.dart';
+import '../../utils/dialogs.dart';
 
 class StudyPage extends StatefulWidget {
   const StudyPage({super.key});
@@ -247,7 +248,11 @@ class _StudyPageState extends State<StudyPage> {
                       subtitle: Text('${r.trackLabel} · ${r.studyMinutes ?? 0}分钟 · 难度${r.difficultyLevel ?? 0} · ${r.recordDate}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline, size: 18),
-                        onPressed: () => context.read<StudyProvider>().delete(r.id!),
+                        onPressed: () async {
+  if (await showDeleteConfirm(context, item: '该学习记录')) {
+    context.read<StudyProvider>().delete(r.id!);
+  }
+},
                       ),
                     ),
                   )),

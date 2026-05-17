@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/daily_record.dart';
 import '../../providers/record_provider.dart';
+import '../../utils/dialogs.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -275,7 +276,11 @@ class _RecordCard extends StatelessWidget {
               ),
             ),
             GestureDetector(
-              onTap: () => context.read<RecordProvider>().delete(record.recordId!),
+              onTap: () async {
+                if (await showDeleteConfirm(context, item: '该记录')) {
+                  context.read<RecordProvider>().delete(record.recordId!);
+                }
+              },
               child: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
             ),
           ],

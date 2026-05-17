@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/empty_mood.dart';
 import '../../providers/empty_mood_provider.dart';
+import '../../utils/dialogs.dart';
 
 class EmptyMoodPage extends StatefulWidget {
   const EmptyMoodPage({super.key});
@@ -218,7 +219,11 @@ class _EmptyCard extends StatelessWidget {
         subtitle: Text('${log.recordDate}  ${log.triggerCause ?? ""}'),
         trailing: IconButton(
           icon: const Icon(Icons.delete_outline, size: 18),
-          onPressed: () => context.read<EmptyMoodProvider>().delete(log.id!),
+          onPressed: () async {
+            if (await showDeleteConfirm(context, item: '该空虚记录')) {
+              context.read<EmptyMoodProvider>().delete(log.id!);
+            }
+          },
         ),
       ),
     );

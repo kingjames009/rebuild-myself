@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/finance.dart';
 import '../../providers/finance_provider.dart';
+import '../../utils/dialogs.dart';
 
 class FinancePage extends StatefulWidget {
   const FinancePage({super.key});
@@ -280,7 +281,11 @@ class _FinancePageState extends State<FinancePage> {
                       subtitle: Text('${l.recordDate} · 压力${l.moneyPressure} · 行动${l.actionMinutes ?? 0}分钟 · ¥${l.gapAmount ?? 0}'),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete_outline, size: 18),
-                        onPressed: () => context.read<FinanceProvider>().delete(l.id!),
+                        onPressed: () async {
+                        if (await showDeleteConfirm(context, item: '该财务记录')) {
+                          context.read<FinanceProvider>().delete(l.id!);
+                        }
+                      },
                       ),
                     ),
                   )),

@@ -4,6 +4,7 @@ import '../../config/theme.dart';
 import '../../models/goal.dart';
 import '../../models/task.dart';
 import '../../providers/goal_provider.dart';
+import '../../utils/dialogs.dart';
 
 class GoalPage extends StatefulWidget {
   const GoalPage({super.key});
@@ -340,7 +341,11 @@ class _GoalCard extends StatelessWidget {
                       goal.status == 1 ? AppTheme.success : AppTheme.textMuted),
                   const Spacer(),
                   GestureDetector(
-                    onTap: () => context.read<GoalProvider>().deleteGoal(goal.goalId!),
+                    onTap: () async {
+                      if (await showDeleteConfirm(context, item: '该目标')) {
+                        context.read<GoalProvider>().deleteGoal(goal.goalId!);
+                      }
+                    },
                     child: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
                   ),
                 ],
@@ -618,7 +623,11 @@ class _TaskItem extends StatelessWidget {
                   )),
             ),
             GestureDetector(
-              onTap: () => context.read<GoalProvider>().deleteTask(task.taskId!),
+              onTap: () async {
+                if (await showDeleteConfirm(context, item: '该任务')) {
+                  context.read<GoalProvider>().deleteTask(task.taskId!);
+                }
+              },
               child: const Icon(Icons.close, size: 16, color: AppTheme.textMuted),
             ),
           ]),

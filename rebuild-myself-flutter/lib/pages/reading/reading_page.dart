@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../models/book.dart';
 import '../../providers/reading_provider.dart';
+import '../../utils/dialogs.dart';
 
 class ReadingPage extends StatefulWidget {
   const ReadingPage({super.key});
@@ -209,7 +210,11 @@ class _ReadingPageState extends State<ReadingPage> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, size: 16),
-                            onPressed: () => context.read<ReadingProvider>().delete(r.id!),
+                            onPressed: () async {
+                            if (await showDeleteConfirm(context, item: '该阅读记录')) {
+                              context.read<ReadingProvider>().delete(r.id!);
+                            }
+                          },
                             padding: EdgeInsets.zero, constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                           ),
                         ],
