@@ -26,29 +26,29 @@ jobs:
         run: mvn -B -DskipTests clean package -Pprod
         working-directory: rebuild-myself-server
 
-      - name: Setup SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.ALIYUN_SSH_KEY }}
+      - name: Decode SSH key
+        run: |
+          echo "${{ secrets.ALIYUN_SSH_KEY }}" | base64 -d > deploy_key
+          chmod 644 deploy_key
 
       - name: Upload JAR to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
+          key_path: /github/workspace/deploy_key
           port: 22
           source: "rebuild-myself-server/target/rebuild-myself-server-1.0.0.jar"
           target: "/data/rebuild-myself"
           strip_components: 3
-          use_insecure_cipher: true
 
       - name: Restart service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
+          key_path: /github/workspace/deploy_key
           port: 22
-          use_insecure_cipher: true
           script: |
             systemctl daemon-reload
             systemctl restart rebuild-myself
