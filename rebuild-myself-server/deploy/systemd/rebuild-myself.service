@@ -1,0 +1,21 @@
+[Unit]
+Description=日新 — 全维度人生重塑自律成长
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/data/rebuild-myself
+EnvironmentFile=/data/rebuild-myself/env.sh
+ExecStart=/usr/bin/java -jar /data/rebuild-myself/rebuild-myself-server-1.0.0.jar --spring.profiles.active=prod
+ExecStop=/bin/kill -15 $MAINPID
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+
+# 日志
+StandardOutput=append:/data/rebuild-myself/logs/stdout.log
+StandardError=append:/data/rebuild-myself/logs/stderr.log
+
+[Install]
+WantedBy=multi-user.target

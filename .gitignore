@@ -1,0 +1,85 @@
+# ============================================================
+# Maven (rebuild-myself-server)
+# ============================================================
+**/target/
+**/pom.xml.tag
+**/pom.xml.releaseBackup
+**/pom.xml.versionsBackup
+**/pom.xml.next
+**/dependency-reduced-pom.xml
+
+# ============================================================
+# Node / npm (rebuild-myself-web)
+# ============================================================
+**/node_modules/
+**/.npm/
+
+# ============================================================
+# Vue / Vite (rebuild-myself-web)
+# ============================================================
+rebuild-myself-web/dist/
+
+# ============================================================
+# Flutter (rebuild-myself-flutter)
+# ============================================================
+**/build/
+**/.dart_tool/
+**/.pub/
+**/pub-cache/
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/.flutter-plugins-dependencies
+**/.packages
+**/.flutter-plugins
+**/*.iml
+**/*.ipr
+**/*.iws
+**/coverage/
+app.*.symbols
+app.*.map.json
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.idea/
+**/.idea/
+*.swp
+*.swo
+*~
+.vscode/
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+
+# ============================================================
+# OS
+# ============================================================
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log
+*.class
+
+# ============================================================
+# Environment / Secrets (should never be committed)
+# ============================================================
+.env
+.env.local
+.env.*.local
+**/env.sh
+**/application-local.yml
+
+# ============================================================
+# Misc build / temp
+# ============================================================
+*.tmp
+*.bak
+*.swp
+*.zip
+*.tar.gz
+*.tgz
+
+# Override: track deploy env template
+!/rebuild-myself-server/deploy/env.sh

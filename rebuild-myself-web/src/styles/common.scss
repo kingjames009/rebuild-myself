@@ -1,0 +1,36 @@
+// 精进PC端全局样式 — 极简沉静
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #F5F7FA;
+  color: #2C3E50;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.page-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  h2 { font-size: 20px; font-weight: 600; color: #2C3E50; }
+}
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  .stat-value { font-size: 28px; font-weight: 700; color: #2C3E50; }
+  .stat-label { font-size: 12px; color: #999; margin-top: 4px; }
+}
+.el-card { margin-bottom: 16px; }

@@ -1,0 +1,42 @@
+package com.rebuildmyself.controller;
+
+import com.rebuildmyself.common.Result;
+import com.rebuildmyself.entity.AiPsychologicalReport;
+import com.rebuildmyself.service.AiPsychologicalReportService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/report")
+public class AiReportController {
+
+    @Autowired
+    private AiPsychologicalReportService aiPsychologicalReportService;
+
+    @PostMapping("/generate")
+    public Result<?> generateReport(@RequestBody Map<String, Object> body,
+                                    @RequestAttribute("userId") Long userId) {
+        int cycleType = body.get("cycleType") instanceof Integer i ? i : 1;
+        return Result.ok(aiPsychologicalReportService.generateReport(userId, cycleType));
+    }
+
+    @GetMapping("/page")
+    public Result<?> page(@RequestParam(defaultValue = "1") Integer page,
+                          @RequestParam(defaultValue = "10") Integer size,
+                          @RequestAttribute("userId") Long userId) {
+        return Result.ok(aiPsychologicalReportService.pageByUser(userId, page, size));
+    }
+
+    @GetMapping("/{id}")
+    public Result<?> getById(@PathVariable Long id) {
+        return Result.ok(aiPsychologicalReportService.getById(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public Result<?> remove(@PathVariable Long id) {
+        aiPsychologicalReportService.removeById(id);
+        return Result.ok();
+    }
+}
