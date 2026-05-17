@@ -181,6 +181,23 @@ class FocusTimerProvider extends ChangeNotifier {
       final db = await DatabaseHelper().db;
       await db.insert('study_track_record', record.toJson());
 
+      // Mark the corresponding daily plan as completed
+      final period = _timePeriod;
+      if (period != null) {
+        await db.update('daily_model_plan', {
+          'isCompleted': 1,
+          'is_completed': 1,
+          'completedAt': DateTime.now().toIso8601String(),
+          'completed_at': DateTime.now().toIso8601String(),
+        }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, period]);
+        await db.update('daily_model_plan', {
+          'isCompleted': 1,
+          'is_completed': 1,
+          'completedAt': DateTime.now().toIso8601String(),
+          'completed_at': DateTime.now().toIso8601String(),
+        }, where: 'plan_date = ? AND time_period = ?', whereArgs: [date, period]);
+      }
+
       final api = ApiClient();
       if (api.hasToken) {
         try {

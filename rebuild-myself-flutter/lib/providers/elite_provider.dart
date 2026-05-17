@@ -34,60 +34,21 @@ class EliteProvider extends ChangeNotifier {
   List<EliteHabit> habitsByCategory(int cat) =>
       _habits.where((h) => h.habitCategory == cat).toList();
 
-  /// MCT (Metacognitive Therapy) based anti-rumination protocol.
-  /// Core insight: rumination is maintained by the CAS (Cognitive Attentional Syndrome) —
-  /// a learned pattern of responding to intrusive thoughts with extended thinking,
-  /// threat monitoring, and thought suppression. All three backfire.
-  ///
-  /// Treatment target: break the CAS loop. Not by challenging thought content,
-  /// but by changing the metacognitive relationship to thoughts.
-  /// Skill requires repetition — the same small set of practices repeats daily.
-  ///
-  /// Reference: Wells (2009, 2020); Normann & Morina (2018, meta-analysis).
-  static const _mctProtocol = [
-    // === Attention Training Technique (micro version, 2-3 min) ===
-    // Wells' ATT is the first-line MCT intervention. It rebuilds executive
-    // attentional control independent of thought content. The full protocol
-    // is 12 min; this is a desk-friendly micro version.
-    'ATT注意训练：闭眼，依次专注你听到的第1种声音(5s)→第2种(5s)→第3种(5s)，'
-        '然后快速在这3种声音间切换(10次)，最后同时关注所有声音(15s)。'
-        '目的不是放松，是训练你把注意力从内部念头拉回外部现实的执行控制力。',
-
-    // === Detached Mindfulness ===
-    // The core MCT stance. Key: the goal is NOT to reduce the thought,
-    // NOT to challenge its content, NOT to replace it with a positive thought.
-    // The goal is to change your RELATIONSHIP to the thought — from fusion
-    // (believing and engaging) to detached awareness.
-    '分离觉察：当你注意到自己在反刍，暂停。对自己说"这是一个正在出现的想法"。'
-        '不分析它为什么来，不判断它是对是错，不试图推开它。'
-        '就像你在公交站等车——各种车来了又走，你不是必须上去。',
-
-    // === Situational Attentional Refocusing (SAR) ===
-    // The 3-step in-the-moment procedure when rumination is detected.
-    '反刍中断3步法：(1)标记——"这是反刍，不是解决问题"；'
-        '(2)外移——将注意力转向一个外部刺激（屏幕上的一个字、键盘的触感、窗外的声音）；'
-        '(3)行为启动——立即开始一个具体的动作（打一个字、拿水杯、站起来）。',
-
-    // === Concrete Processing Switch ===
-    // Based on Watkins' RFCBT. Rumination operates in abstract/analytical mode
-    // ("why am I like this"). The antidote is concrete/experiential processing
-    // ("what exactly happened, moment by moment"). This is a cognitive mode switch.
-    '具体化切换：反刍的认知特征是抽象分析——"为什么我总这样"、"这说明了什么"。'
-        '强制切换到具体层面：当前房间里有什么？你正在做的任务下一步具体动作是什么？'
-        '你能用手碰到的最近一样东西是什么材质？用感官信息替代概念化思考。',
-
-    // === Behavioral Experiment ===
-    // MCT challenges the metacognitive belief "I need to think this through / I can't
-    // control these thoughts" through experimentation rather than argument.
-    '行为实验：如果你相信"不想清楚这件事就没法工作"，做个测试——'
-        '给自己30分钟完全不想它，只做具体任务。30分钟后检查：你完成了什么？'
-        '你完成的工作量是否超过你边反刍边工作的产出？用数据而非感觉来验证信念。',
+  /// Work-time focus reminders — one every 30 minutes.
+  /// Simple, actionable prompts to bring attention back to the present moment.
+  /// No tasks, no goals, no habits — just a gentle nudge to re-center.
+  static const _workFocusReminders = [
+    '🧘 暂停30秒：做一次深呼吸，感受气息从鼻子进入、经过胸腔、到达腹部，然后缓缓呼出。回到当下。',
+    '🧘 身体扫描：注意你此刻的坐姿。肩膀是否紧张？下颌是否紧咬？放松它们，然后继续手头的工作。',
+    '🧘 五感锚定：快速注意——你此刻看到的一种颜色、听到的一个声音、感受到的一种触感。你在这里。',
+    '🧘 停顿练习：停止思考30秒。只关注你的呼吸。如果念头冒出来，轻轻放它走，回到呼吸。',
+    '🧘 当下确认：对自己说"此刻我在这里，我正在工作"。不需要思考下一步，不需要回忆刚才。就在此刻。',
+    '🧘 放松双肩：大多数人工作时双肩微微耸起。现在刻意放下肩膀，做3次自然呼吸，然后继续。',
+    '🧘 喝水 + 起身：站起来，走到饮水机或窗边，喝一杯水，看一眼窗外，再回到座位。',
+    '🧘 注意力重置：闭上眼睛数10次呼吸。每数一次，感觉注意力回到一个更清晰的起点。',
+    '🧘 正念眨眼：有意识地眨5次眼，感受眼皮接触的微细感觉。然后放松眼周肌肉，继续工作。',
+    '🧘 手掌温暖：双手快速搓热，轻轻盖在闭着的眼睛上。感受掌心的温度和黑暗中的宁静。30秒后放下。',
   ];
-
-  /// Reminder: the first item in the protocol is ATT, which works best as a
-  /// dedicated morning session. The remaining items cycle through work hours.
-  /// Repeating the same 5 items daily is intentional — skill consolidation
-  /// requires repetition, not novelty.
 
   /// Anti-short-video behavioral nudges for after-work hours.
   /// Each is a proven clinical psychology technique applied to the
@@ -727,14 +688,14 @@ class EliteProvider extends ChangeNotifier {
     return goalWords.any((w) => content.contains(w));
   }
 
-  // ---- Weekday: 1-hour block plan (builds list, no DB) ----
+  // ---- Weekday: segment-based plan (builds list, no DB) ----
 
   List<DailyModelPlan> _buildWeekdayPlans(String date, List<TaskTodo> todayTasks) {
     final tasks = List<TaskTodo>.from(todayTasks)
       ..sort((a, b) => (a.taskLevel ?? 4).compareTo(b.taskLevel ?? 4));
 
     final ws = _workSchedule;
-    final blocks = ws.buildDayBlocks(); // 1-hour blocks
+    final blocks = ws.buildDayBlocks(); // 30-min blocks during work, 1-hour elsewhere
 
     // Partition custom items by preferred segment
     final beforeWorkItems = _customItems
@@ -746,21 +707,18 @@ class EliteProvider extends ChangeNotifier {
 
     final morningHabits = _habits.where((h) => h.habitCategory == 1).toList();
     final allDayHabits = _habits.where((h) => h.habitCategory == 2).toList();
-    // Day habits that are lunch-specific — keep them out of work-hour blocks
     final lunchHabits = allDayHabits
         .where((h) => (h.habitContent ?? '').contains('午休') || (h.habitContent ?? '').contains('午间'))
-        .toList();
-    final workDayHabits = allDayHabits
-        .where((h) => !(h.habitContent ?? '').contains('午休') && !(h.habitContent ?? '').contains('午间'))
         .toList();
     final eveningHabits = _habits.where((h) => h.habitCategory == 3).toList();
     final nightHabits = _habits.where((h) => h.habitCategory == 4).toList();
 
     // Indexes for cycling through items when more blocks than items
     int customBeforeIdx = 0, customLunchIdx = 0, customAfterIdx = 0;
-    int morningIdx = 0, workDayIdx = 0, lunchDayIdx = 0, eveningIdx = 0, nightIdx = 0;
+    int morningIdx = 0, lunchDayIdx = 0, eveningIdx = 0, nightIdx = 0;
     int taskIdx = 0;
     int afterWorkNudgeIdx = 0;
+    int workFocusIdx = 0; // cycles through work-time mindfulness reminders
     final generated = <DailyModelPlan>[];
 
     for (final block in blocks) {
@@ -799,18 +757,10 @@ class EliteProvider extends ChangeNotifier {
 
         case '上班时·上午':
         case '上班时·下午':
-          if (workDayHabits.isNotEmpty) {
-            final h = workDayHabits[workDayIdx % workDayHabits.length];
-            content = '🧘 ${h.habitContent}';
-            planType = 5;
-            difficulty = h.intensityLevel ?? 1;
-            workDayIdx++;
-          } else {
-            content = _mctProtocol[workDayIdx % _mctProtocol.length];
-            planType = 5;
-            difficulty = 2;
-            workDayIdx++;
-          }
+          content = _workFocusReminders[workFocusIdx % _workFocusReminders.length];
+          planType = 5;
+          difficulty = 1;
+          workFocusIdx++;
           break;
 
         case '午休':

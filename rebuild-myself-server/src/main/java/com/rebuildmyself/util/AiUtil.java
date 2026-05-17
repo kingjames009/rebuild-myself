@@ -50,14 +50,14 @@ public class AiUtil {
 
         body.set("messages", messages);
         body.set("temperature", 0.7);
-        body.set("max_tokens", 4096);
+        body.set("max_tokens", 8192);
 
         try {
             HttpResponse response = HttpRequest.post(apiUrl)
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .body(body.toString())
-                    .timeout(30000)
+                    .timeout(60000)
                     .execute();
 
             if (response.isOk()) {

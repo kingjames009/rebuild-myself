@@ -15,6 +15,7 @@ import '../../models/task.dart';
 import '../../services/sync_service.dart';
 import '../../services/api_client.dart';
 import '../../services/database_helper.dart';
+import '../../services/notification_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,17 +24,70 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _onboardingShown = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    NotificationService.init();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await SyncService().syncAll();
       await _loadData();
       if (mounted) _checkOnboarding();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _sendCurrentTaskNotification();
+    }
+  }
+
+  void _sendCurrentTaskNotification() {
+    final elite = context.read<EliteProvider>();
+    final now = DateTime.now();
+    final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final currentMin = now.hour * 60 + now.minute;
+
+    dynamic currentPlan;
+    for (final p in elite.plans) {
+      if (p.planDate != dateStr) continue;
+      final period = p.timePeriod;
+      if (period == null) continue;
+      final parts = period.split('-');
+      if (parts.length != 2) continue;
+      final start = _parseMinutesStr(parts[0]);
+      final end = _parseMinutesStr(parts[1]);
+      if (start == null || end == null) continue;
+      if (currentMin >= start && currentMin < end) {
+        currentPlan = p;
+        break;
+      }
+    }
+
+    if (currentPlan != null) {
+      final content = currentPlan.planContent ?? '';
+      final periodLabel = currentPlan.timePeriod ?? '';
+      NotificationService.show('当前任务 $periodLabel', content);
+    }
+  }
+
+  int? _parseMinutesStr(String hhmm) {
+    final parts = hhmm.trim().split(':');
+    if (parts.length != 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return h * 60 + m;
   }
 
   Future<void> _loadData() async {
@@ -67,6 +121,7 @@ class _HomePageState extends State<HomePage> {
     await context.read<GoalProvider>().loadAll();
     await context.read<RecordProvider>().loadByDate(dateStr);
     await context.read<FinanceProvider>().loadAll();
+    await context.read<StudyProvider>().loadAll();
     final elite = context.read<EliteProvider>();
     await elite.loadAll();
 
@@ -842,7 +897,7 @@ class _HomePageState extends State<HomePage> {
                                   onPressed: () async {
                                     final mins = await timer.stopTimer();
                                     if (ctx.mounted) {
-                                      context.read<StudyProvider>().loadAll();
+                                      await context.read<StudyProvider>().loadAll();
                                       ScaffoldMessenger.of(ctx).showSnackBar(
                                         SnackBar(
                                           content: Text('专注 $mins 分钟已计入学习时长 ✨'),
@@ -881,7 +936,7 @@ class _HomePageState extends State<HomePage> {
                                     onTap: () async {
                                       final mins = await timer.stopTimer();
                                       if (ctx.mounted) {
-                                        context.read<StudyProvider>().loadAll();
+                                        await context.read<StudyProvider>().loadAll();
                                         ScaffoldMessenger.of(ctx).showSnackBar(
                                           SnackBar(
                                             content: Text('专注 $mins 分钟已计入学习时长 ✨'),

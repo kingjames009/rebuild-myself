@@ -134,12 +134,17 @@ class WorkSchedule {
 
   /// Split a time range into 1-hour blocks. Returns list of [start, end] pairs.
   static List<List<String>> hourlySlots(String segStart, String segEnd) {
+    return slotsOf(segStart, segEnd, 60);
+  }
+
+  /// Split a time range into blocks of [durationMinutes]. Returns list of [start, end] pairs.
+  static List<List<String>> slotsOf(String segStart, String segEnd, int durationMinutes) {
     final slots = <List<String>>[];
     final startMin = parseMinutes(segStart);
     final endMin = parseMinutes(segEnd);
     int current = startMin;
     while (current < endMin) {
-      int next = current + 60;
+      int next = current + durationMinutes;
       if (next > endMin) next = endMin;
       slots.add([formatMinutes(current), formatMinutes(next)]);
       current = next;
@@ -161,7 +166,9 @@ class WorkSchedule {
     return '下班后';
   }
 
-  /// Build 1-hour time blocks covering the full workday.
+  /// Build time blocks covering the full workday.
+  /// Morning/evening use 1-hour blocks; work segments (上班时) use 30-minute blocks
+  /// so the user gets a mindfulness reminder every half hour during work.
   List<TimeBlockConfig> buildDayBlocks() {
     final blocks = <TimeBlockConfig>[];
     final segs = [
@@ -175,7 +182,10 @@ class WorkSchedule {
     final types = [1, 0, 2, 0, 1];
 
     for (int i = 0; i < segs.length; i++) {
-      final slots = hourlySlots(segs[i][0], segs[i][1]);
+      // Work segments (index 1, 3): 30-minute blocks for frequent mindfulness check-ins
+      final isWorkSegment = i == 1 || i == 3;
+      final duration = isWorkSegment ? 30 : 60;
+      final slots = slotsOf(segs[i][0], segs[i][1], duration);
       for (final slot in slots) {
         blocks.add(TimeBlockConfig(
           start: slot[0],

@@ -81,17 +81,23 @@ flutter build apk --release
 逻辑（`EliteProvider.generateTodayPlan()`）：
 1. 清空当天已有计划
 2. 读取当天未完成待办，按优先级排序（taskLevel: 1最重要→4最不重要）
-3. 按配置的时间块遍历：
-   - type=0 (固定锚点) → 用 label 作为内容
-   - type=1 (待办槽位) → 填入优先待办
-   - type=2 (推荐) → 用 label 作为推荐内容
+3. 按配置的时间块遍历（工作时段为30分钟块，其余为60分钟块）：
+   - **上班前/午休/下班后** → 填入待办、习惯、目标内容
+   - **上班时·上午/下午** → 仅填入冥想专注提醒（30分钟一条），不安排任何目标/待办/习惯
 4. 超出槽位的待办合并到最后一个计划项
 5. 自动判断日类型：周六日用 weekend 模板，其他用 workday 模板
+6. **计时器完成自动标记**：FocusTimerProvider 的 `stopTimer()` 在保存学习记录后，会将对应 `daily_model_plan` 行标记为 `isCompleted=1` + `completedAt`
 
 时间块配置（ElitePage → 时间设置卡片）：
 - 工作日/周末两套独立配置，存储在 `time_block_config` 表
 - 可编辑每块的起止时间、类型、标签
+- 工作时段（上班时·上午/下午）固定为30分钟块，用于高频冥想提醒
 - 预设：下班后(18:00-22:30)、全天候(6:00-22:00)、紧凑型(19:00-22:00)
+
+工作时段冥想提醒（`_workFocusReminders`，共10条）：
+- 简单的正念/呼吸/身体扫描提示，每条一句话
+- 上班时段每30分钟轮换一条，帮助用户回到当下
+- 替代了之前的MCT反刍干预协议
 
 ## 首页卡片
 
@@ -111,8 +117,10 @@ lib/
 │   └── shell.dart                 # MainShell 底部导航
 ├── models/                        # 数据模型（见上表）
 ├── providers/                     # ChangeNotifier 提供者
-│   ├── elite_provider.dart        # 计划生成核心逻辑在此
+│   ├── elite_provider.dart        # 计划生成核心逻辑（含工作时段冥想提醒）
+│   ├── focus_timer_provider.dart  # 专注计时器（墙钟计时+计划完成标记）
 │   ├── goal_provider.dart         # 目标 + 任务（TaskTodo）
+│   ├── study_provider.dart        # 学习记录（今日累计时长统计）
 │   └── auth_provider.dart         # JWT认证
 ├── pages/
 │   ├── home/home_page.dart        # 首页（当前时段卡片+快捷导航+今日规划）
@@ -123,6 +131,7 @@ lib/
 │   ├── api_client.dart            # HTTP 客户端（JWT Bearer）
 │   ├── sync_service.dart          # 数据同步 push/pull
 │   ├── database_helper.dart       # LocalStorage 封装
+│   ├── notification_service.dart  # 本地通知（app进入后台时发送当前任务提醒）
 │   ├── local_storage.dart         # 平台分发
 │   ├── local_storage_web.dart     # Web localStorage 实现
 │   └── local_storage_io.dart      # IO 文件 JSON 实现
@@ -130,6 +139,23 @@ lib/
     ├── build.gradle.kts           # 阿里云镜像源
     └── settings.gradle.kts        # 阿里云镜像源
 ```
+
+## AI 心理复盘报告
+
+入口：首页「AI复盘报告」快捷导航 → `POST /api/report/generate`
+
+**客户端** (`report_provider.dart`)：
+- `generateReport(cycleType, date)` → 调用服务端生成接口
+- `loadHistory(page, size)` → 加载历史报告列表
+
+**服务端** (`AiPsychologicalReportServiceImpl.generateReport()`)：
+1. 根据 `cycleType`（1=日/2=周/3=月/4=年）计算日期范围
+2. 聚合该范围内用户的全维度数据（10张表）：今日规划、学习记录、日常记录、财务心理、行为干预、阅读、休闲、每日自检、副业规划、空虚情绪
+3. 每条计划带4种状态标记：已完成（有记录）/已完成（无记录）/有记录未完成/未做（无任何记录）
+4. 构建结构化文本摘要（非JSON dump）发给 AI 生成报告
+5. 若 AI 不可用，自动回退保存数据摘要作为报告内容
+
+AI 参数 (`AiUtil.java`)：timeout=60s, max_tokens=8192, temperature=0.7
 
 ## 后端
 
@@ -142,6 +168,8 @@ lib/
 - `POST /api/sync/upload` — 上传数据
 - `GET /api/sync/pull?since=` — 增量拉取
 - `GET /api/sync/export?start=&end=` — 全量导出
+- `POST /api/report/generate` — 生成AI复盘报告（body: cycleType, date）
+- `GET /api/report/history?page=&size=` — 历史报告分页
 
 启动：`cd rebuild-myself-server && mvn spring-boot:run -Dspring-boot.run.arguments="--spring.profiles.active=dev"`
 
