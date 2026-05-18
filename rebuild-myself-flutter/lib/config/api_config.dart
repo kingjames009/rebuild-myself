@@ -9,4 +9,5 @@ class ApiConfig {
   static const Duration connectTimeout = Duration(seconds: 10);
   static const Duration receiveTimeout = Duration(seconds: 15);
   static const Duration uploadTimeout = Duration(seconds: 30);
+  static const Duration aiReportTimeout = Duration(seconds: 150);
 }

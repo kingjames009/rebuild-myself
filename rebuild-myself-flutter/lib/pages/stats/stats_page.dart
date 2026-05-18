@@ -5,6 +5,7 @@ import '../../models/ai_report.dart';
 import '../../providers/report_provider.dart';
 import '../../providers/record_provider.dart';
 import '../../providers/intervene_provider.dart';
+import '../../utils/dialogs.dart';
 
 class StatsPage extends StatefulWidget {
   const StatsPage({super.key});
@@ -13,7 +14,7 @@ class StatsPage extends StatefulWidget {
 }
 
 class _StatsPageState extends State<StatsPage> {
-  int _cycle = 2;
+  int _cycle = 1;
 
   static const _cycleLabels = {1: '日复盘', 2: '周复盘', 3: '月复盘', 4: '年复盘'};
 
@@ -53,9 +54,101 @@ class _StatsPageState extends State<StatsPage> {
     }
   }
 
+  DateTime _reportDate = DateTime.now().subtract(const Duration(days: 1));
+
   Future<void> _generateReport() async {
     final p = context.read<ReportProvider>();
-    final result = await p.generateReport(_cycle);
+    final isDaily = _cycle == 1;
+
+    // Show confirmation dialog with date picker (daily) or just confirm (week/month/year)
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('${_cycleLabels[_cycle]}生成'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('AI将聚合你所有模块数据，生成结构化复盘报告。\n\n（需连接后端AI服务，可能需要几秒钟）'),
+              if (isDaily) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    const Text('复盘日期：', style: TextStyle(fontSize: 14)),
+                    GestureDetector(
+                      onTap: () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: _reportDate,
+                          firstDate: DateTime(2024, 1, 1),
+                          lastDate: DateTime.now(),
+                        );
+                        if (picked != null) {
+                          _reportDate = picked;
+                          setDialogState(() {});
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_fmt(_reportDate), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.primary)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.calendar_today, size: 14, color: AppTheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('生成报告'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true) return;
+
+    // Check for existing daily report
+    if (isDaily) {
+      final dateStr = _fmt(_reportDate);
+      final existing = p.findExisting(1, dateStr);
+      if (existing != null) {
+        final shouldReplace = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('已有复盘报告'),
+            content: Text('$dateStr 的日复盘报告已存在，是否删除并重新生成？'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                child: const Text('删除并重新生成'),
+              ),
+            ],
+          ),
+        );
+        if (shouldReplace != true) return;
+        await p.delete(existing.reportId!);
+      }
+    }
+
+    final dateStr = isDaily ? _fmt(_reportDate) : null;
+    final result = await p.generateReport(_cycle, date: dateStr);
     if (mounted) {
       if (result != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -63,7 +156,7 @@ class _StatsPageState extends State<StatsPage> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('AI复盘报告已生成')),
+          const SnackBar(content: Text('AI复盘报告已生成'), backgroundColor: AppTheme.success),
         );
       }
     }
@@ -187,9 +280,18 @@ class _StatsPageState extends State<StatsPage> {
                   children: [
                     const Text('🤖 AI 复盘报告', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     OutlinedButton(
-                      onPressed: _generateReport,
+                      onPressed: reportProv.generating ? null : _generateReport,
                       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), textStyle: const TextStyle(fontSize: 12)),
-                      child: const Text('✨ 生成复盘报告'),
+                      child: reportProv.generating
+                          ? const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                                SizedBox(width: 6),
+                                Text('生成中…'),
+                              ],
+                            )
+                          : const Text('✨ 生成复盘报告'),
                     ),
                   ],
                 ),
@@ -258,7 +360,22 @@ class _StatsPageState extends State<StatsPage> {
                                   decoration: BoxDecoration(color: const Color(0xFFF0F3F4), borderRadius: BorderRadius.circular(4)),
                                   child: Text(_cycleLabels[r.cycleType] ?? '复盘', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
                                 ),
-                                Text(r.cycleRange ?? r.createTime ?? '', style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(r.cycleRange ?? r.createTime ?? '', style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                                    const SizedBox(width: 4),
+                                    GestureDetector(
+                                      onTap: () async {
+                                        if (r.reportId == null) return;
+                                        if (await showDeleteConfirm(context, item: '该复盘报告')) {
+                                          reportProv.delete(r.reportId!);
+                                        }
+                                      },
+                                      child: const Icon(Icons.delete_outline, size: 16, color: AppTheme.danger),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                             const SizedBox(height: 6),

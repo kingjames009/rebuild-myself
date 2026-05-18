@@ -33,6 +33,9 @@ public class AiUtil {
      * @return AI生成的复盘报告文本
      */
     public String generateReport(String systemPrompt, String userData) {
+        log.info("AI call START — url={}, model={}, promptLen={}, dataLen={}",
+                apiUrl, model, systemPrompt.length(), userData.length());
+
         JSONObject body = new JSONObject();
         body.set("model", model);
 
@@ -52,13 +55,17 @@ public class AiUtil {
         body.set("temperature", 0.7);
         body.set("max_tokens", 8192);
 
+        long start = System.currentTimeMillis();
         try {
             HttpResponse response = HttpRequest.post(apiUrl)
                     .header("Authorization", "Bearer " + apiKey)
                     .header("Content-Type", "application/json")
                     .body(body.toString())
-                    .timeout(60000)
+                    .timeout(120000)
                     .execute();
+
+            long elapsed = System.currentTimeMillis() - start;
+            log.info("AI response received — status={}, elapsed={}ms", response.getStatus(), elapsed);
 
             if (response.isOk()) {
                 JSONObject result = JSONUtil.parseObj(response.body());
@@ -66,13 +73,21 @@ public class AiUtil {
                 if (choices != null && !choices.isEmpty()) {
                     JSONObject first = choices.getJSONObject(0);
                     JSONObject message = first.getJSONObject("message");
-                    return message.getStr("content", "");
+                    String content = message.getStr("content", "");
+                    log.info("AI call SUCCESS — contentLen={}, elapsed={}ms", content.length(), elapsed);
+                    return content;
                 }
+                log.warn("AI response had no choices — body preview: {}",
+                        response.body().substring(0, Math.min(500, response.body().length())));
             }
-            log.error("AI API error: {}", response.body());
+            log.error("AI API error — status={}, body preview: {}",
+                    response.getStatus(),
+                    response.body().substring(0, Math.min(500, response.body().length())));
             return null;
         } catch (Exception e) {
-            log.error("AI API call failed", e);
+            long elapsed = System.currentTimeMillis() - start;
+            log.error("AI API call FAILED — elapsed={}ms, errorType={}, message={}",
+                    elapsed, e.getClass().getSimpleName(), e.getMessage(), e);
             return null;
         }
     }

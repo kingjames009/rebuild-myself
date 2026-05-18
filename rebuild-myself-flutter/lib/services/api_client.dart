@@ -54,10 +54,11 @@ class ApiClient {
     }
   }
 
-  Future<ApiResponse> post(String path, {dynamic data}) async {
+  Future<ApiResponse> post(String path, {dynamic data, Duration? timeout}) async {
     try {
       final body = data != null ? json.encode(data) : null;
-      final resp = await http.post(_uri(path), headers: _headers, body: body).timeout(ApiConfig.connectTimeout);
+      final resp = await http.post(_uri(path), headers: _headers, body: body)
+          .timeout(timeout ?? ApiConfig.connectTimeout);
       return _handleResponse(resp);
     } catch (e) {
       return ApiResponse(code: -1, msg: e.toString(), data: null);

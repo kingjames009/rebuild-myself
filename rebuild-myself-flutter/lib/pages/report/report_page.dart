@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
+import '../../models/ai_report.dart';
 import '../../providers/report_provider.dart';
 import '../../utils/dialogs.dart';
 
@@ -26,7 +27,11 @@ class _ReportPageState extends State<ReportPage> {
       '${_selectedDate.year}-${_pad(_selectedDate.month)}-${_pad(_selectedDate.day)}';
 
   void _showGenerateDialog(int cycle) {
-    final isDaily = cycle == 1; // only daily report needs date selector
+    _showConfirmDialog(cycle);
+  }
+
+  void _showConfirmDialog(int cycle) {
+    final isDaily = cycle == 1;
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -80,6 +85,28 @@ class _ReportPageState extends State<ReportPage> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
             ElevatedButton(
               onPressed: () async {
+                if (isDaily) {
+                  final existing = context.read<ReportProvider>().findExisting(1, _dateStr());
+                  if (existing != null) {
+                    final shouldReplace = await showDialog<bool>(
+                      context: ctx,
+                      builder: (c) => AlertDialog(
+                        title: const Text('已有复盘报告'),
+                        content: Text('${_dateStr()} 的日复盘已存在，是否删除并重新生成？'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消')),
+                          ElevatedButton(
+                            onPressed: () => Navigator.pop(c, true),
+                            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+                            child: const Text('删除并重新生成'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (shouldReplace != true) return;
+                    await context.read<ReportProvider>().delete(existing.reportId!);
+                  }
+                }
                 Navigator.pop(ctx);
                 final result = await context.read<ReportProvider>().generateReport(
                   cycle,
@@ -92,7 +119,7 @@ class _ReportPageState extends State<ReportPage> {
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('AI复盘报告已生成')),
+                      const SnackBar(content: Text('AI复盘报告已生成'), backgroundColor: AppTheme.success),
                     );
                   }
                 }
@@ -181,9 +208,11 @@ class _ReportList extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       children: [
         ElevatedButton.icon(
-          onPressed: onGenerate,
-          icon: const Icon(Icons.auto_awesome),
-          label: const Text('生成新复盘报告'),
+          onPressed: provider.generating ? null : onGenerate,
+          icon: provider.generating
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.auto_awesome),
+          label: Text(provider.generating ? '生成中…' : '生成新复盘报告'),
           style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
         ),
         const SizedBox(height: 16),
@@ -205,8 +234,9 @@ class _ReportList extends StatelessWidget {
                         const Spacer(),
                         Text(r.createTime?.substring(0, 10) ?? '', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline, size: 18, color: AppTheme.textMuted),
+                          icon: const Icon(Icons.delete_outline, size: 20, color: AppTheme.danger),
                           onPressed: () async {
+                            if (r.reportId == null) return;
                             if (await showDeleteConfirm(context, item: '该报告')) {
                               provider.delete(r.reportId!);
                             }

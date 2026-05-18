@@ -9,6 +9,7 @@ import com.rebuildmyself.mapper.*;
 import com.rebuildmyself.service.AiPsychologicalReportService;
 import com.rebuildmyself.util.AiUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.DayOfWeek;
@@ -17,6 +18,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologicalReportMapper, AiPsychologicalReport> implements AiPsychologicalReportService {
@@ -321,9 +323,20 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
 
         String originalData = data.toString();
 
+        log.info("Report AI call — userId={}, cycleType={}, range={}~{}, dataLen={}, recordCount(schedule={},study={},daily={},finance={},intervene={},reading={},leisure={},compare={},sideline={},mood={})",
+                userId, cycleType, startDate, endDate, originalData.length(),
+                dailyModelPlans.size(), studyTrackRecords.size(), dailyRecords.size(),
+                financeMentalLogs.size(), behaviorIntervenes.size(), bookReadRecords.size(),
+                lifeLeisureRecords.size(), dailyCompareChecks.size(), sidelinePlans.size(),
+                emptyMoodLogs.size());
+
         // === Call AI via AiUtil ===
         String systemPrompt = "你是一位资深认知行为心理学顾问。请基于以下用户的今日全维度数据，生成一份专业的心理行为复盘报告。\n\n报告必须包含四部分：\n1. 📊 数据总结 — 用数字说话，概括今日计划完成情况、专注时长、情绪状态\n2. 🔍 问题诊断 — 逐项分析每条计划：哪些做到了、哪些没做、哪些有偏差\n3. 🎯 根源溯源 — 从逃避原因、拖延模式、情绪波动中追溯行为问题的心理根源\n4. 💡 定制优化方案 — 3-5条具体、可执行的改进建议\n\n重点关注「今日规划执行详情」中每条计划的状态（已完成/未做/有记录未完成）。对标记为「未做」的项，分析可能的逃避原因并给出明天可执行的对策。对已完成项，肯定执行力的同时检查实际记录是否有改进空间。";
         String reportContent = aiUtil.generateReport(systemPrompt, originalData);
+
+        log.info("Report AI result — userId={}, success={}, contentLen={}",
+                userId, reportContent != null && !reportContent.trim().isEmpty(),
+                reportContent != null ? reportContent.length() : 0);
 
         // === Save report ===
         AiPsychologicalReport report = new AiPsychologicalReport();

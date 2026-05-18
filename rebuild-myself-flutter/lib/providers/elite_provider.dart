@@ -523,6 +523,8 @@ class EliteProvider extends ChangeNotifier {
 
             // Ensure every goal gets at least one plan item
             _tagPlanWithGoalTitles(plans, goals ?? []);
+            // Safety net: strip any non-meditation content from work-hour slots
+            _sanitizeWorkHourPlans(plans);
 
             // Insert all plans — already saved on server, mark synced
             for (final p in plans) {
@@ -568,6 +570,8 @@ class EliteProvider extends ChangeNotifier {
 
     // Post-process: tag plans with matching goal titles
     _tagPlanWithGoalTitles(generated, goals ?? []);
+    // Safety net: strip any non-meditation content from work-hour slots
+    _sanitizeWorkHourPlans(generated);
 
     // Batch insert all plans in a single write
     await db.insertBatch('daily_model_plan',
@@ -603,6 +607,9 @@ class EliteProvider extends ChangeNotifier {
       final plan = plans[i];
       final planContent = plan.planContent ?? '';
       if (planContent.isEmpty || planContent.startsWith('【')) continue;
+      // Never tag work-hour plans — they are meditation reminders only
+      final period = plan.timePeriod ?? '';
+      if (period.contains('-') && _isWorkSegment(period.split('-')[0])) continue;
 
       for (int j = 0; j < active.length; j++) {
         if (matched[j] == true) continue;
@@ -686,6 +693,38 @@ class EliteProvider extends ChangeNotifier {
     if (goalWords.isEmpty) return false;
     // If any significant keyword from the goal appears in the plan content, it's a match
     return goalWords.any((w) => content.contains(w));
+  }
+
+  /// Returns true if the given time string falls within a work segment.
+  /// Handles both "HH:MM" and "HH:MM-HH:MM" formats.
+  /// Returns false for non-standard formats (e.g. "晨间", "上午" from server fallback).
+  bool _isWorkSegment(String timeStr) {
+    final hhmm = timeStr.contains('-') ? timeStr.split('-')[0] : timeStr;
+    if (!hhmm.contains(':')) return false;
+    final seg = _workSchedule.segmentFor(hhmm);
+    return seg == '上班时·上午' || seg == '上班时·下午';
+  }
+
+  /// Safety net: replaces any non-meditation content in work-hour slots
+  /// with rotating focus reminders. This guards against AI-generated plans
+  /// or goal-tagging that may have leaked into work segments.
+  void _sanitizeWorkHourPlans(List<DailyModelPlan> plans) {
+    int workFocusIdx = 0;
+    for (int i = 0; i < plans.length; i++) {
+      final plan = plans[i];
+      final period = plan.timePeriod ?? '';
+      if (!_isWorkSegment(period)) continue;
+      // Already a focus reminder? Check by type
+      if (plan.planType == 5 && (plan.planContent ?? '').contains('🧘')) continue;
+      // Replace with a fresh focus reminder
+      final reminder = _workFocusReminders[workFocusIdx % _workFocusReminders.length];
+      plans[i] = plan.copyWith(
+        planContent: reminder,
+        planType: 5,
+        difficulty: 1,
+      );
+      workFocusIdx++;
+    }
   }
 
   // ---- Weekday: segment-based plan (builds list, no DB) ----
