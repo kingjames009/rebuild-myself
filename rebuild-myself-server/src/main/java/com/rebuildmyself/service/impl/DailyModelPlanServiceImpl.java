@@ -431,6 +431,22 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
         LambdaUpdateWrapper<DailyModelPlan> wrapper = new LambdaUpdateWrapper<DailyModelPlan>()
                 .set(DailyModelPlan::getActualNote, actualNote)
                 .set(DailyModelPlan::getCompletedAt, LocalDateTime.now())
+                .set(DailyModelPlan::getIsCompleted, 1)
+                .eq(DailyModelPlan::getUserId, userId)
+                .eq(DailyModelPlan::getPlanDate, planDate)
+                .eq(DailyModelPlan::getTimePeriod, timePeriod);
+        this.update(wrapper);
+        return this.getOne(new LambdaQueryWrapper<DailyModelPlan>()
+                .eq(DailyModelPlan::getUserId, userId)
+                .eq(DailyModelPlan::getPlanDate, planDate)
+                .eq(DailyModelPlan::getTimePeriod, timePeriod));
+    }
+
+    @Override
+    public DailyModelPlan toggleComplete(Long userId, LocalDate planDate, String timePeriod, int isCompleted) {
+        LambdaUpdateWrapper<DailyModelPlan> wrapper = new LambdaUpdateWrapper<DailyModelPlan>()
+                .set(DailyModelPlan::getIsCompleted, isCompleted)
+                .set(DailyModelPlan::getCompletedAt, isCompleted == 1 ? LocalDateTime.now() : null)
                 .eq(DailyModelPlan::getUserId, userId)
                 .eq(DailyModelPlan::getPlanDate, planDate)
                 .eq(DailyModelPlan::getTimePeriod, timePeriod);

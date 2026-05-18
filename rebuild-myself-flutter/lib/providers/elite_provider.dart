@@ -302,6 +302,36 @@ class EliteProvider extends ChangeNotifier {
     await loadAll();
   }
 
+  /// Toggle the completion status of a plan item.
+  Future<void> updatePlanCompletion(String planDate, String timePeriod, int isCompleted) async {
+    final db = await DatabaseHelper().db;
+    final completedAt = isCompleted == 1 ? DateTime.now().toIso8601String() : null;
+    await db.update('daily_model_plan', {
+      'isCompleted': isCompleted,
+      'completedAt': completedAt,
+    }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [planDate, timePeriod]);
+
+    // Push to server
+    final api = ApiClient();
+    if (api.hasToken) {
+      try {
+        await api.put('/plan/toggle', data: {
+          'planDate': planDate,
+          'timePeriod': timePeriod,
+          'isCompleted': isCompleted,
+        });
+      } catch (_) {}
+    }
+
+    // Update in-memory list
+    for (int i = 0; i < _plans.length; i++) {
+      if (_plans[i].planDate == planDate && _plans[i].timePeriod == timePeriod) {
+        _plans[i] = _plans[i].copyWith(isCompleted: isCompleted, completedAt: completedAt);
+      }
+    }
+    notifyListeners();
+  }
+
   /// Shift time periods when user drags a plan to a new position.
   /// Items between oldIndex and newIndex shift one slot toward the dragged item's
   /// original position; the dragged item takes the far end's time period.

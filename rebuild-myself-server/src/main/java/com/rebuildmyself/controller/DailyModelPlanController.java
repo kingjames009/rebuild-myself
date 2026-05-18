@@ -69,6 +69,21 @@ public class DailyModelPlanController {
         return updated != null ? Result.ok(updated) : Result.fail(404, "Plan not found");
     }
 
+    @PutMapping("/toggle")
+    public Result<?> toggleComplete(@RequestBody Map<String, Object> body,
+                                    @RequestAttribute("userId") Long userId) {
+        String planDate = (String) body.get("planDate");
+        String timePeriod = (String) body.get("timePeriod");
+        Object isCompletedObj = body.get("isCompleted");
+        if (planDate == null || timePeriod == null || isCompletedObj == null) {
+            return Result.fail("planDate, timePeriod, and isCompleted are required");
+        }
+        int isCompleted = isCompletedObj instanceof Integer ? (Integer) isCompletedObj : Integer.parseInt(isCompletedObj.toString());
+        DailyModelPlan updated = dailyModelPlanService.toggleComplete(
+                userId, LocalDate.parse(planDate), timePeriod, isCompleted);
+        return updated != null ? Result.ok(updated) : Result.fail(404, "Plan not found");
+    }
+
     @PutMapping("/date/{date}")
     public Result<?> replaceByDate(@PathVariable String date,
                                    @RequestBody List<DailyModelPlan> plans,

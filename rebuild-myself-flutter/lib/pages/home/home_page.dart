@@ -521,6 +521,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         final typeLabel = _typeLabel(type);
                         final existingNote = p.actualNote;
                         final hasNote = existingNote != null && existingNote.isNotEmpty;
+                        final completed = p.isCompleted == 1;
                         return Container(
                           key: ValueKey('${p.planDate}_${p.timePeriod}'),
                           padding: const EdgeInsets.only(bottom: 6),
@@ -528,11 +529,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 10, horizontal: 12),
                             decoration: BoxDecoration(
-                              color: hasNote
+                              color: completed
                                   ? AppTheme.success.withValues(alpha: 0.04)
-                                  : AppTheme.primary.withValues(alpha: 0.02),
+                                  : hasNote
+                                      ? AppTheme.success.withValues(alpha: 0.04)
+                                      : AppTheme.primary.withValues(alpha: 0.02),
                               borderRadius: BorderRadius.circular(8),
-                              border: hasNote
+                              border: (completed || hasNote)
                                   ? Border.all(
                                       color:
                                           AppTheme.success.withValues(alpha: 0.15))
@@ -558,7 +561,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     height: 10,
                                     margin: const EdgeInsets.only(top: 4),
                                     decoration: BoxDecoration(
-                                        color: hasNote
+                                        color: (completed || hasNote)
                                             ? AppTheme.success
                                             : AppTheme.primary,
                                         shape: BoxShape.circle),
@@ -603,7 +606,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                           children: [
                                             Expanded(
                                               child: Text(content,
-                                                  style: const TextStyle(fontSize: 14)),
+                                                  style: TextStyle(
+                                                      fontSize: 14,
+                                                      decoration: completed ? TextDecoration.lineThrough : null,
+                                                      color: completed ? AppTheme.textMuted : AppTheme.textPrimary,
+                                                  )),
                                             ),
                                             const SizedBox(width: 2),
                                             const Icon(Icons.edit,
@@ -627,7 +634,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                                       fontSize: 10,
                                                       color: AppTheme.success)),
                                             ),
-                                            if (hasNote) ...[
+                                            if (completed) ...[
+                                              const SizedBox(width: 8),
+                                              const Icon(Icons.check_circle,
+                                                  size: 13,
+                                                  color: AppTheme.success),
+                                              const SizedBox(width: 2),
+                                              const Text('已完成',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppTheme.success)),
+                                            ] else if (hasNote) ...[
                                               const SizedBox(width: 8),
                                               const Icon(Icons.notes,
                                                   size: 13,
@@ -713,6 +730,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       String content, String? existingNote) {
     final noteCtrl = TextEditingController(text: existingNote ?? '');
     final planType = _planTypeForPeriod(date, period);
+    final elite = context.read<EliteProvider>();
+    // Find current plan to get isCompleted
+    DailyModelPlan? currentPlan;
+    for (final p in elite.plans) {
+      if (p.planDate == date && p.timePeriod == period) {
+        currentPlan = p;
+        break;
+      }
+    }
+    final completed = currentPlan?.isCompleted == 1;
 
     showModalBottomSheet(
       context: context,
@@ -967,11 +994,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 20),
 
+                    // ---- Completion Toggle ----
+                    Row(
+                      children: [
+                        Icon(
+                          completed ? Icons.check_circle : Icons.radio_button_unchecked,
+                          size: 22,
+                          color: completed ? AppTheme.success : AppTheme.textMuted,
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text('标记为已完成',
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                        ),
+                        Switch(
+                          value: completed,
+                          activeTrackColor: AppTheme.success,
+                          onChanged: (v) {
+                            final newVal = v ? 1 : 0;
+                            context.read<EliteProvider>().updatePlanCompletion(date, period, newVal);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
                     // ---- Actual Note Section ----
                     const Text('实际状况记录',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    const Text('不是勾选完成，是记录这个时段实际发生了什么',
+                    const Text('记录这个时段实际发生了什么',
                         style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                     const SizedBox(height: 10),
                     TextField(
