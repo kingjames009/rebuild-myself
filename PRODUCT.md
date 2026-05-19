@@ -2,6 +2,29 @@
 
 ## 版本历史
 
+### v1.0.6 (2026-05-19)
+
+- **晨间自检弹窗**：每天打开 App 先弹出晨间自检，选择昨晚睡眠时长（3-12h）和此刻焦虑程度（1-5），确认后自动算出当日保护等级。当日已自检则不再弹窗。
+- **三级保护系统**：根据睡眠和焦虑两个脆弱因子自动分级——🟢 绿（睡眠≥6h 且 焦虑≤2）、🟡 黄（单一因素差）、🔴 红（睡眠<6h 且 焦虑≥4，双重高风险）。
+- **工作时段差异化提醒**：保护等级决定工作时段提醒频率和内容——绿级 30 分钟冥想专注提醒、黄级 20 分钟身体锚定+接地练习、红级 15 分钟物理打断动作指令。
+- **三套提醒内容库**：每级各 10 条，共 30 条，每次轮换不同内容。绿级用正念呼吸/身体扫描、黄级用 5-4-3-2-1 接地/4-7-8 呼吸/温度锚定、红级用起身走动/冷水冲手腕/整理桌面等纯行动指令。
+- **首页保护等级标识**：欢迎卡片显示当前保护等级颜色标签（绿/黄/红），一目了然。
+- **AI 复盘增强**：生成复盘报告时自动附带当日晨间自检数据（睡眠时长、焦虑等级、保护等级），AI 可将"状态基线"与"计划完成率"关联分析。睡眠不足+高焦虑时自动标注风险警告。
+- **计划生成流程重构**：计划生成从 `_loadData()` 拆出，移到晨间自检之后。自检 → 确定保护等级 → 用正确的提醒频率和内容生成计划。
+
+**相关文件：**
+- `lib/models/morning_check_in.dart` — 新增：晨间自检数据模型，含 `computeProtection()` 自动分级算法
+- `lib/pages/home/home_page.dart` — 晨间自检弹窗（睡眠滑动条+焦虑五档选择+保护等级实时预览）、`_checkMorningCheckIn()` 流程控制、首页保护等级标识
+- `lib/providers/elite_provider.dart` — 三套提醒数组（`_workFocusReminders`/`_bodyAnchorReminders`/`_physicalInterruptReminders`）、`_currentWorkReminders` 动态选择、`_workBlockMinutes` 动态间隔、`loadTodayCheckIn()`/`saveCheckIn()`
+- `lib/models/time_block.dart` — `buildDayBlocks()` 新增 `workBlockMinutes` 可选参数（默认 30）
+- `lib/providers/report_provider.dart` — 生成报告时附加晨间自检数据到请求体
+- `lib/services/sync_service.dart` — `morning_check_in` 表注册（push/pull 双向同步）
+- `lib/services/local_storage_io.dart` — `morning_check_in` 表 ID 列映射
+- `lib/services/local_storage_web.dart` — `morning_check_in` 表 ID 列映射（Web 端）
+- 服务端：`AiReportController.java` — 提取 `morningCheckIn` 参数
+- 服务端：`AiPsychologicalReportService.java` — 接口新增 `morningCheckIn` 参数
+- 服务端：`AiPsychologicalReportServiceImpl.java` — 数据摘要新增"晨间自检"段落，含睡眠/焦虑/保护等级及风险标注
+
 ### v1.0.5 (2026-05-18)
 
 - **首页计划完成标记**：每个计划项点击圆点进入详情弹窗，新增"标记为已完成"开关。已完成项在列表中显示绿色圆点 + 删除线 + "已完成"标签。服务端新增 `PUT /api/plan/toggle` 接口。
