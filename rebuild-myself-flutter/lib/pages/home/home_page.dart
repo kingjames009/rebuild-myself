@@ -730,16 +730,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       String content, String? existingNote) {
     final noteCtrl = TextEditingController(text: existingNote ?? '');
     final planType = _planTypeForPeriod(date, period);
-    final elite = context.read<EliteProvider>();
-    // Find current plan to get isCompleted
-    DailyModelPlan? currentPlan;
-    for (final p in elite.plans) {
-      if (p.planDate == date && p.timePeriod == period) {
-        currentPlan = p;
-        break;
-      }
-    }
-    final completed = currentPlan?.isCompleted == 1;
 
     showModalBottomSheet(
       context: context,
@@ -750,6 +740,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final timer = ctx.watch<FocusTimerProvider>();
+            // Read completed status inside the builder so it re-evaluates on every rebuild
+            final elite = ctx.read<EliteProvider>();
+            DailyModelPlan? currentPlan;
+            for (final p in elite.plans) {
+              if (p.planDate == date && p.timePeriod == period) {
+                currentPlan = p;
+                break;
+              }
+            }
+            final completed = currentPlan?.isCompleted == 1;
             final timerRunning = timer.isRunning && timer.matchesPlan(date, period);
             return Padding(
               padding: EdgeInsets.only(
@@ -1010,9 +1010,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Switch(
                           value: completed,
                           activeTrackColor: AppTheme.success,
-                          onChanged: (v) {
+                          onChanged: (v) async {
                             final newVal = v ? 1 : 0;
-                            context.read<EliteProvider>().updatePlanCompletion(date, period, newVal);
+                            await context.read<EliteProvider>().updatePlanCompletion(date, period, newVal);
                             setSheetState(() {});
                           },
                         ),

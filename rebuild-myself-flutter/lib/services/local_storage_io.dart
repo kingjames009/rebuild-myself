@@ -120,11 +120,13 @@ class LocalStorage {
   Future<int> insert(String table, Map<String, dynamic> data) async {
     final rows = await loadTable(table);
     final idCol = _idColumnForTable(table);
-    final newId = _nextId(rows, idCol);
-    data[idCol] = newId;
+    final existingId = data[idCol];
+    if (existingId == null || (existingId is int && existingId <= 0)) {
+      data[idCol] = _nextId(rows, idCol);
+    }
     rows.add(Map<String, dynamic>.from(data));
     await _saveTable(table);
-    return newId;
+    return data[idCol] as int;
   }
 
   Future<void> insertBatch(String table, List<Map<String, dynamic>> dataList) async {
@@ -133,7 +135,10 @@ class LocalStorage {
     final idCol = _idColumnForTable(table);
     int nextId = _nextId(rows, idCol);
     for (final data in dataList) {
-      data[idCol] = nextId++;
+      final existingId = data[idCol];
+      if (existingId == null || (existingId is int && existingId <= 0)) {
+        data[idCol] = nextId++;
+      }
       rows.add(Map<String, dynamic>.from(data));
     }
     await _saveTable(table);
