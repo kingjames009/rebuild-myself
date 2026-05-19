@@ -17,6 +17,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -37,7 +38,7 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
     private final AiUtil aiUtil;
 
     @Override
-    public AiPsychologicalReport generateReport(Long userId, Integer cycleType, LocalDate date) {
+    public AiPsychologicalReport generateReport(Long userId, Integer cycleType, LocalDate date, Map<String, Object> morningCheckIn) {
         // Use provided date, default to today
         LocalDate refDate = date != null ? date : LocalDate.now();
         LocalDate startDate;
@@ -321,10 +322,45 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
             data.append("\n");
         }
 
+        // ---- Part: 晨间自检（来自Flutter端每日早晨评估） ----
+        if (morningCheckIn != null && !morningCheckIn.isEmpty()) {
+            data.append("=== 晨间自检 ===\n");
+            Object sleepObj = morningCheckIn.get("sleep_hours");
+            if (sleepObj == null) sleepObj = morningCheckIn.get("sleepHours");
+            Object anxietyObj = morningCheckIn.get("anxiety_level");
+            if (anxietyObj == null) anxietyObj = morningCheckIn.get("anxietyLevel");
+            Object protectionObj = morningCheckIn.get("protection_level");
+            if (protectionObj == null) protectionObj = morningCheckIn.get("protectionLevel");
+
+            double sleepHours = sleepObj instanceof Number n ? n.doubleValue() : 0;
+            int anxietyLevel = anxietyObj instanceof Number n ? n.intValue() : 0;
+            int protectionLevel = protectionObj instanceof Number n ? n.intValue() : 0;
+            String protectionLabel = switch (protectionLevel) {
+                case 3 -> "🔴 红级（睡眠差+高焦虑，15分钟物理打断保护）";
+                case 2 -> "🟡 黄级（单因素脆弱，20分钟身体锚定保护）";
+                case 1 -> "🟢 绿级（状态良好，30分钟冥想专注保护）";
+                default -> "未知";
+            };
+
+            data.append("- 昨晚睡眠：").append(String.format("%.1f", sleepHours)).append("小时\n");
+            data.append("- 晨间焦虑：").append(anxietyLevel).append("/5\n");
+            data.append("- 保护等级：").append(protectionLabel).append("\n");
+            if (sleepHours < 6) {
+                data.append("  ⚠ 睡眠不足（<6h），前额叶执行功能下降，自控力薄弱\n");
+            }
+            if (anxietyLevel >= 4) {
+                data.append("  ⚠ 高焦虑（≥4/5），杏仁核活跃，容易陷入反刍思维\n");
+            }
+            if (sleepHours < 6 && anxietyLevel >= 4) {
+                data.append("  🔴 双重高风险：睡眠不足+高焦虑叠加，认知资源极度有限，优先进行物理级行为干预而非思考型任务\n");
+            }
+            data.append("\n");
+        }
+
         String originalData = data.toString();
 
-        log.info("Report AI call — userId={}, cycleType={}, range={}~{}, dataLen={}, recordCount(schedule={},study={},daily={},finance={},intervene={},reading={},leisure={},compare={},sideline={},mood={})",
-                userId, cycleType, startDate, endDate, originalData.length(),
+        log.info("Report AI call — userId={}, cycleType={}, range={}~{}, dataLen={}, checkIn={}, recordCount(schedule={},study={},daily={},finance={},intervene={},reading={},leisure={},compare={},sideline={},mood={})",
+                userId, cycleType, startDate, endDate, originalData.length(), morningCheckIn != null,
                 dailyModelPlans.size(), studyTrackRecords.size(), dailyRecords.size(),
                 financeMentalLogs.size(), behaviorIntervenes.size(), bookReadRecords.size(),
                 lifeLeisureRecords.size(), dailyCompareChecks.size(), sidelinePlans.size(),

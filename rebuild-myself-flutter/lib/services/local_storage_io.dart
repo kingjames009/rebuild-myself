@@ -63,6 +63,7 @@ class LocalStorage {
       'empty_mood_log': 'id', 'book_read_record': 'id', 'life_leisure_record': 'id',
       'elite_habit_lib': 'id', 'daily_model_plan': 'plan_id',
       'daily_compare_check': 'check_id', 'ai_psychological_report': 'report_id',
+      'morning_check_in': 'id',
     };
     return map[table] ?? 'id';
   }

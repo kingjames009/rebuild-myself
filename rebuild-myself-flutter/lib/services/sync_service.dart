@@ -23,6 +23,7 @@ class SyncService {
     'daily_compare_check': 'checks',
     'daily_model_plan': 'plans',
     'ai_psychological_report': 'reports',
+    'morning_check_in': 'morningChecks',
   };
 
   static const _allTables = [
@@ -30,6 +31,7 @@ class SyncService {
     'finance_mental_log', 'study_track_record', 'sideline_plan',
     'empty_mood_log', 'book_read_record', 'life_leisure_record',
     'daily_compare_check', 'daily_model_plan', 'ai_psychological_report',
+    'morning_check_in',
   ];
 
   // Map common camelCase keys → snake_case for push
@@ -60,6 +62,8 @@ class SyncService {
     'isCompleted': 'is_completed', 'actualNote': 'actual_note', 'completedAt': 'completed_at',
     'reportId': 'report_id', 'cycleType': 'cycle_type', 'cycleRange': 'cycle_range',
     'originalData': 'original_data', 'reportContent': 'report_content',
+    'sleepHours': 'sleep_hours', 'anxietyLevel': 'anxiety_level',
+    'protectionLevel': 'protection_level', 'date': 'date',
   };
 
   Map<String, dynamic> _toSnake(Map<String, dynamic> row) {
@@ -152,6 +156,7 @@ class SyncService {
       'empties': 'empty_mood_log', 'books': 'book_read_record',
       'leisures': 'life_leisure_record', 'checks': 'daily_compare_check',
       'plans': 'daily_model_plan', 'reports': 'ai_psychological_report',
+      'morningChecks': 'morning_check_in',
     };
 
     for (final entry in data.entries) {

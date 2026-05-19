@@ -11,7 +11,7 @@ import '../../providers/study_provider.dart';
 import '../../providers/focus_timer_provider.dart';
 import '../../models/daily_plan.dart';
 import '../../models/goal.dart';
-import '../../models/task.dart';
+import '../../models/morning_check_in.dart';
 import '../../services/sync_service.dart';
 import '../../services/api_client.dart';
 import '../../services/database_helper.dart';
@@ -35,6 +35,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await SyncService().syncAll();
       await _loadData();
+      if (mounted) await _checkMorningCheckIn();
       if (mounted) _checkOnboarding();
     });
   }
@@ -94,16 +95,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final now = DateTime.now();
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    // Step 1: Check server FIRST for today's plans, before any local state could interfere
-    bool serverHasPlans = false;
+    // Check server for today's plans and merge into local DB
     final api = ApiClient();
     if (api.hasToken) {
       try {
         final resp = await api.get('/plan/date/$dateStr');
         if (resp.ok && resp.data is List && (resp.data as List).isNotEmpty) {
-          serverHasPlans = true;
           final db = await DatabaseHelper().db;
-          // Clean local today plans then pull from server
           await db.delete('daily_model_plan', where: 'planDate = ?', whereArgs: [dateStr]);
           await db.delete('daily_model_plan', where: 'plan_date = ?', whereArgs: [dateStr]);
           for (final item in resp.data) {
@@ -117,23 +115,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       } catch (_) {}
     }
 
-    // Step 2: Load other data
+    // Load all local data (includes morning check-in via EliteProvider.loadAll)
     await context.read<GoalProvider>().loadAll();
     await context.read<RecordProvider>().loadByDate(dateStr);
     await context.read<FinanceProvider>().loadAll();
     await context.read<StudyProvider>().loadAll();
-    final elite = context.read<EliteProvider>();
-    await elite.loadAll();
-
-    // Step 3: Only generate if neither local nor server has today's plans
-    final todayPlans = elite.plans.where((p) => p.planDate == dateStr).toList();
-    if (todayPlans.isEmpty && !serverHasPlans) {
-      final goalProv = context.read<GoalProvider>();
-      final todayTasks = goalProv.tasks
-          .where((t) => t.taskDate == dateStr && t.isComplete != 1)
-          .toList();
-      await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
-    }
+    await context.read<EliteProvider>().loadAll();
   }
 
   void _checkOnboarding() {
@@ -142,6 +129,200 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (goalProv.goals.isNotEmpty) return;
     _onboardingShown = true;
     _showGoalOnboarding();
+  }
+
+  /// Check if morning self-check-in has been done today.
+  /// If not, show the dialog first. Then generate plans if needed.
+  Future<void> _checkMorningCheckIn() async {
+    final elite = context.read<EliteProvider>();
+    if (elite.todayCheckIn == null) {
+      await _showMorningCheckIn();
+    } else {
+      await _generatePlansIfNeeded();
+    }
+  }
+
+  Future<void> _showMorningCheckIn() async {
+    double sleepHours = 7;
+    int anxietyLevel = 1;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      enableDrag: false,
+      isDismissible: false,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final protection = MorningCheckIn.computeProtection(sleepHours, anxietyLevel);
+            final labels = ['', '🟢 绿级保护', '🟡 黄级保护', '🔴 红级保护'];
+            final descs = [
+              '',
+              '状态不错，工作时段每30分钟一次冥想提醒，助你保持专注',
+              '今天需要多加关照，每20分钟一次身体锚定练习，帮你回到当下',
+              '高风险天，每15分钟一次物理打断——用身体动作切断焦虑循环',
+            ];
+            final color = _protectionColor(protection);
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('晨间自检', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  const Text('花10秒评估今天的状态，帮你调整保护强度', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                  const SizedBox(height: 20),
+
+                  // ---- Sleep hours ----
+                  const Text('昨晚睡了几小时？', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Slider(
+                          value: sleepHours,
+                          min: 3, max: 12, divisions: 18,
+                          label: '${sleepHours.toStringAsFixed(1)}小时',
+                          onChanged: (v) {
+                            sleepHours = double.parse(v.toStringAsFixed(1));
+                            setSheetState(() {});
+                          },
+                        ),
+                      ),
+                      SizedBox(
+                        width: 60,
+                        child: Text('${sleepHours.toStringAsFixed(1)}h',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ---- Anxiety level ----
+                  const Text('此刻焦虑程度？', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: List.generate(5, (i) {
+                      final level = i + 1;
+                      const levelLabels = ['很平静', '有点烦', '较焦虑', '很焦虑', '极度焦虑'];
+                      final selected = anxietyLevel == level;
+                      return GestureDetector(
+                        onTap: () {
+                          anxietyLevel = level;
+                          setSheetState(() {});
+                        },
+                        child: Container(
+                          width: 56,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: selected ? AppTheme.primary : AppTheme.primary.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(10),
+                            border: selected ? null : Border.all(color: AppTheme.border),
+                          ),
+                          child: Column(
+                            children: [
+                              Text('$level', style: TextStyle(
+                                fontSize: 20, fontWeight: FontWeight.w700,
+                                color: selected ? Colors.white : AppTheme.textPrimary,
+                              )),
+                              const SizedBox(height: 2),
+                              Text(levelLabels[i], style: TextStyle(
+                                fontSize: 9,
+                                color: selected ? Colors.white70 : AppTheme.textMuted,
+                              )),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // ---- Protection preview ----
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: color.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(labels[protection], style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700, color: color,
+                        )),
+                        const SizedBox(height: 4),
+                        Text(descs[protection],
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        Navigator.of(ctx).pop();
+                        final today = _todayDash();
+                        final checkIn = MorningCheckIn(
+                          date: today,
+                          sleepHours: sleepHours,
+                          anxietyLevel: anxietyLevel,
+                          protectionLevel: protection,
+                        );
+                        await context.read<EliteProvider>().saveCheckIn(checkIn);
+                        if (mounted) await _generatePlansIfNeeded();
+                      },
+                      child: const Text('确认', style: TextStyle(fontSize: 15)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Generate today's plan if no plans exist yet for today.
+  Future<void> _generatePlansIfNeeded() async {
+    final dateStr = _todayDash();
+    final elite = context.read<EliteProvider>();
+    final todayPlans = elite.plans.where((p) => p.planDate == dateStr).toList();
+    if (todayPlans.isNotEmpty) return;
+
+    final goalProv = context.read<GoalProvider>();
+    final todayTasks = goalProv.tasks
+        .where((t) => t.taskDate == dateStr && t.isComplete != 1)
+        .toList();
+    try {
+      await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
+    } catch (_) {}
+  }
+
+  Color _protectionColor(int level) {
+    switch (level) {
+      case 3: return const Color(0xFFF56C6C);
+      case 2: return const Color(0xFFE6A23C);
+      default: return const Color(0xFF67C23A);
+    }
   }
 
   void _showGoalOnboarding() {
@@ -330,6 +511,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           const SizedBox(height: 4),
                           Text('${_today()} ${_weekday()}',
                               style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                          const SizedBox(height: 6),
+                          Consumer<EliteProvider>(
+                            builder: (_, elite, __) {
+                              final level = elite.protectionLevel;
+                              final label = ['', '🟢 绿级保护', '🟡 黄级保护', '🔴 红级保护'][level];
+                              final color = _protectionColor(level);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     ),

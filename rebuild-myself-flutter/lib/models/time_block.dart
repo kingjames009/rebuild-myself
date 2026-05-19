@@ -167,9 +167,10 @@ class WorkSchedule {
   }
 
   /// Build time blocks covering the full workday.
-  /// Morning/evening use 1-hour blocks; work segments (上班时) use 30-minute blocks
-  /// so the user gets a mindfulness reminder every half hour during work.
-  List<TimeBlockConfig> buildDayBlocks() {
+  /// Morning/evening use 1-hour blocks; work segments use [workBlockMinutes].
+  /// Higher protection levels use shorter blocks for more frequent check-ins:
+  /// Green 30min, Yellow 20min, Red 15min.
+  List<TimeBlockConfig> buildDayBlocks({int workBlockMinutes = 30}) {
     final blocks = <TimeBlockConfig>[];
     final segs = [
       [morningStart, workStart],
@@ -184,7 +185,7 @@ class WorkSchedule {
     for (int i = 0; i < segs.length; i++) {
       // Work segments (index 1, 3): 30-minute blocks for frequent mindfulness check-ins
       final isWorkSegment = i == 1 || i == 3;
-      final duration = isWorkSegment ? 30 : 60;
+      final duration = isWorkSegment ? workBlockMinutes : 60;
       final slots = slotsOf(segs[i][0], segs[i][1], duration);
       for (final slot in slots) {
         blocks.add(TimeBlockConfig(

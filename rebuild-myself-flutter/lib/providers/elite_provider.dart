@@ -6,6 +6,7 @@ import '../models/task.dart';
 import '../models/time_block.dart';
 import '../models/custom_priority.dart';
 import '../models/goal.dart';
+import '../models/morning_check_in.dart';
 import '../config/holiday_config.dart';
 import '../services/api_client.dart';
 import '../services/database_helper.dart';
@@ -20,6 +21,8 @@ class EliteProvider extends ChangeNotifier {
   List<CustomPriorityItem> _customItems = [];
   bool _loading = false;
   bool _generating = false;
+  MorningCheckIn? _todayCheckIn;
+  int _protectionLevel = 1; // 1=Green, 2=Yellow, 3=Red
 
   List<EliteHabit> get habits => _habits;
   List<DailyModelPlan> get plans => _plans;
@@ -30,6 +33,32 @@ class EliteProvider extends ChangeNotifier {
   List<CustomPriorityItem> get customItems => _customItems;
   bool get loading => _loading;
   bool get generating => _generating;
+  MorningCheckIn? get todayCheckIn => _todayCheckIn;
+  int get protectionLevel => _protectionLevel;
+
+  /// Returns the appropriate reminder set for today's protection level.
+  List<String> get _currentWorkReminders {
+    switch (_protectionLevel) {
+      case 3:
+        return _physicalInterruptReminders;
+      case 2:
+        return _bodyAnchorReminders;
+      default:
+        return _workFocusReminders;
+    }
+  }
+
+  /// Work-segment block duration in minutes based on protection level.
+  int get _workBlockMinutes {
+    switch (_protectionLevel) {
+      case 3:
+        return 15;
+      case 2:
+        return 20;
+      default:
+        return 30;
+    }
+  }
 
   List<EliteHabit> habitsByCategory(int cat) =>
       _habits.where((h) => h.habitCategory == cat).toList();
@@ -100,6 +129,42 @@ class EliteProvider extends ChangeNotifier {
         '每一次延迟都是在重训大脑的等待能力，不要小看。',
   ];
 
+  /// Body-anchoring reminders for Yellow protection level (20-min intervals).
+  /// Evidence base: DBT grounding techniques (Linehan 1993), 5-4-3-2-1 sensory
+  /// exercise, somatic experiencing (Levine 1997). When one vulnerability factor
+  /// is present (poor sleep OR high anxiety), use body sensations to re-anchor
+  /// attention — the body is always in the present moment even when the mind drifts.
+  static const _bodyAnchorReminders = [
+    '🌍 5-4-3-2-1 接地练习：说出你看到的5样东西 → 触摸到的4样 → 听到的3个声音 → 闻到的2种气味 → 1种身体感受。回到此时此地。',
+    '👣 脚底觉察：感受脚掌与地面的接触。脚趾、足弓、脚跟——每一个点的压力。往下扎根，让注意力从脑中降落到脚底。',
+    '🫁 4-7-8 呼吸：吸气4秒 → 屏息7秒 → 缓慢呼气8秒。延长呼出激活副交感神经，心率会自然下降。',
+    '🤲 掌心按压：双手合十用力推压5秒，然后松开。注意掌心温度和微麻感。物理觉知把大脑从抽象焦虑拉回具体身体。',
+    '🪑 坐姿扫描：椅面给大腿的支撑力、靠背给腰的承托、扶手对手肘的触感。这三个接触点是你此刻的锚。',
+    '👃 嗅觉唤醒：如果有咖啡/茶/风油精——闻一下，描述气味给脑海中的自己听。嗅觉直达边缘系统，能快速重置情绪状态。',
+    '🫀 心跳觉察：右手轻放在胸口，感受心跳的节奏。不急不慢，它只是在做它的工作。你不需要控制它，只需要注意到它。',
+    '✋ 温度锚定：手指触摸桌面金属部分、玻璃杯或自己的脸颊。注意温差。温度是最直接的"现在感"——你无法在过去或未来感受到温度。',
+    '👂 最远的声音：闭眼5秒，寻找你能听到的最远的声音——空调声、远处车声、隔壁键盘声。听觉扩展打破注意力窄化。',
+    '🧘 肩颈松解：吸气时耸起双肩到最高点，呼气时突然放下。重复3次。紧张→释放的身体节律给大脑发送"放松"信号。',
+  ];
+
+  /// Physical-interrupt reminders for Red protection level (15-min intervals).
+  /// Evidence base: Behavioral activation (Martell 2001), TIPP skills from DBT
+  /// (Linehan 2015). When both sleep AND anxiety are poor, cognitive strategies
+  /// fail because the amygdala has hijacked the prefrontal cortex. The only way
+  /// out is through the body — physical actions that force a state change.
+  static const _physicalInterruptReminders = [
+    '🚶 起身，走到门口再走回来。就这一段路。身体移动是打破思维死循环最直接的方法。',
+    '💧 冷水冲手腕30秒。前臂内侧皮肤薄、血管浅，冷刺激直接激活潜水反射，心率下降、焦虑缓解。现在就去。',
+    '🙆 站起来，双手举过头顶，用力伸展全身，保持5秒。像猫伸懒腰一样。身体舒展信号=安全信号传递给大脑。',
+    '📦 整理桌面上任意3样东西——对齐杯子、摆正键盘、叠好纸张。简单的物理秩序行为给大脑一个"可控"的反馈。',
+    '👁 用力闭眼5秒，然后突然睁大。重复3次。眼轮匝肌的紧张-释放循环刺激眼心反射，帮助副交感神经激活。',
+    '🤝 双手快速互搓10秒直到掌心发热，然后敷在闭着的眼睛上。温热+黑暗创造了一个短暂的"避难所"。',
+    '🪟 走到窗边，看向窗外最远的一个点，说出它的颜色和形状。远眺放松睫状肌，命名激活前额叶——双重打断焦虑回路。',
+    '🙌 十指交叉放在脑后，双肘向外打开，胸腔打开，下巴微抬。保持这个"开放姿势"15秒。扩张的体态改善呼吸深度。',
+    '🖐 拿起你手边任意一个小物件——笔、杯子、钥匙——翻转它，观察它的纹理、颜色、重量。用30秒"研究"一个普通物品。好奇心天然排斥焦虑。',
+    '🚰 离开座位，走到饮水机或茶水间，接一杯水，站着喝完。这个过程中你移动了、拿取了、吞咽了——三个连续的身体动作构成了一次完整的打断。',
+  ];
+
   Future<void> loadAll() async {
     _loading = true;
     notifyListeners();
@@ -144,6 +209,7 @@ class EliteProvider extends ChangeNotifier {
     await _loadTimeBlocks(db);
     await _loadWorkSchedule(db);
     await _loadCustomItems(db);
+    await loadTodayCheckIn();
     _loading = false;
     notifyListeners();
   }
@@ -209,6 +275,26 @@ class EliteProvider extends ChangeNotifier {
     await db.delete('work_schedule');
     await db.insert('work_schedule', schedule.toJson());
     _workSchedule = schedule;
+    notifyListeners();
+  }
+
+  // ---- Morning check-in / protection level ----
+
+  Future<void> loadTodayCheckIn() async {
+    final db = await DatabaseHelper().db;
+    final today = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+    final rows = await db.query('morning_check_in', where: 'date = ?', whereArgs: [today]);
+    if (rows.isNotEmpty) {
+      _todayCheckIn = MorningCheckIn.fromJson(rows.first);
+      _protectionLevel = _todayCheckIn!.protectionLevel;
+    }
+  }
+
+  Future<void> saveCheckIn(MorningCheckIn checkIn) async {
+    final db = await DatabaseHelper().db;
+    await db.insert('morning_check_in', checkIn.toJson());
+    _todayCheckIn = checkIn;
+    _protectionLevel = checkIn.protectionLevel;
     notifyListeners();
   }
 
@@ -744,10 +830,14 @@ class EliteProvider extends ChangeNotifier {
       final plan = plans[i];
       final period = plan.timePeriod ?? '';
       if (!_isWorkSegment(period)) continue;
-      // Already a focus reminder? Check by type
-      if (plan.planType == 5 && (plan.planContent ?? '').contains('🧘')) continue;
+      // Already a work-time reminder? Check by type and known reminder content
+      if (plan.planType == 5) {
+        final content = plan.planContent ?? '';
+        final knownEmojis = ['🧘', '🌍', '👣', '🫁', '🤲', '🪑', '👃', '🫀', '✋', '👂', '🚶', '💧', '🙆', '📦', '👁', '🤝', '🪟', '🙌', '🖐', '🚰'];
+        if (knownEmojis.any((e) => content.contains(e))) continue;
+      }
       // Replace with a fresh focus reminder
-      final reminder = _workFocusReminders[workFocusIdx % _workFocusReminders.length];
+      final reminder = _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
       plans[i] = plan.copyWith(
         planContent: reminder,
         planType: 5,
@@ -764,7 +854,7 @@ class EliteProvider extends ChangeNotifier {
       ..sort((a, b) => (a.taskLevel ?? 4).compareTo(b.taskLevel ?? 4));
 
     final ws = _workSchedule;
-    final blocks = ws.buildDayBlocks(); // 30-min blocks during work, 1-hour elsewhere
+    final blocks = ws.buildDayBlocks(workBlockMinutes: _workBlockMinutes);
 
     // Partition custom items by preferred segment
     final beforeWorkItems = _customItems
@@ -826,7 +916,7 @@ class EliteProvider extends ChangeNotifier {
 
         case '上班时·上午':
         case '上班时·下午':
-          content = _workFocusReminders[workFocusIdx % _workFocusReminders.length];
+          content = _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
           planType = 5;
           difficulty = 1;
           workFocusIdx++;

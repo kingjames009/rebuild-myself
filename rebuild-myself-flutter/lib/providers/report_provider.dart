@@ -68,6 +68,19 @@ class ReportProvider extends ChangeNotifier {
     try {
       final body = <String, dynamic>{'cycleType': cycleType};
       if (date != null && date.isNotEmpty) body['date'] = date;
+
+      // Attach morning check-in data if available for the report date
+      try {
+        final db = await DatabaseHelper().db;
+        final checkInDate = (date != null && date.isNotEmpty)
+            ? date
+            : '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+        final rows = await db.query('morning_check_in', where: 'date = ?', whereArgs: [checkInDate]);
+        if (rows.isNotEmpty) {
+          body['morningCheckIn'] = rows.first;
+        }
+      } catch (_) {}
+
       final resp = await api.post('/report/generate', data: body,
           timeout: ApiConfig.aiReportTimeout);
       if (resp.ok && resp.data != null) {

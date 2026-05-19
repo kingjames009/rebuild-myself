@@ -24,9 +24,11 @@ public class AiReportController {
         int cycleType = body.get("cycleType") instanceof Integer i ? i : 1;
         String dateStr = body.get("date") instanceof String s && !s.isEmpty() ? s : null;
         LocalDate date = dateStr != null ? LocalDate.parse(dateStr) : null;
-        log.info("Report generate REQUEST — userId={}, cycleType={}, date={}", userId, cycleType, dateStr);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> morningCheckIn = body.get("morningCheckIn") instanceof Map ? (Map<String, Object>) body.get("morningCheckIn") : null;
+        log.info("Report generate REQUEST — userId={}, cycleType={}, date={}, hasCheckIn={}", userId, cycleType, dateStr, morningCheckIn != null);
         long start = System.currentTimeMillis();
-        AiPsychologicalReport report = aiPsychologicalReportService.generateReport(userId, cycleType, date);
+        AiPsychologicalReport report = aiPsychologicalReportService.generateReport(userId, cycleType, date, morningCheckIn);
         long elapsed = System.currentTimeMillis() - start;
         log.info("Report generate DONE — userId={}, reportId={}, contentLen={}, elapsed={}ms",
                 userId, report.getReportId(),
