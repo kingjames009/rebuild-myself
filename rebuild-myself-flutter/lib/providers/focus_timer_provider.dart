@@ -204,12 +204,29 @@ class FocusTimerProvider extends ChangeNotifier {
 
   // ── Timer logic ──────────────────────────────────────────────────
 
+  /// Start a new timer. If a timer is already running, the current
+  /// session's accumulated time is auto-saved before the reset so
+  /// no time is ever silently discarded by starting a new task.
   void startTimer({
     required int minutes,
     required String planDate,
     required String timePeriod,
     required String planContent,
   }) {
+    // Auto-save any running session before resetting
+    if (_isRunning && _accumulatedSeconds > 0 && _planDate != null) {
+      final saveMins = _accumulatedSeconds ~/ 60;
+      if (saveMins > 0) {
+        _saveStudyRecord(
+          trackType: _trackType,
+          content: _planContent ?? '专注计时学习',
+          minutes: saveMins,
+          date: _planDate!,
+          period: _timePeriod,
+        );
+      }
+      _clearSession();
+    }
     _targetSeconds = minutes * 60;
     _accumulatedSeconds = 0;
     _startedAt = DateTime.now();

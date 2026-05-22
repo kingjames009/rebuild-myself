@@ -977,7 +977,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (ctx) {
-        return StatefulBuilder(
+        return PopScope(
+          // Intercept back button — auto-save any running timer before pop.
+          onPopInvokedWithResult: (didPop, _) async {
+            if (!didPop) return;
+            // Use 'context' (HomePage scope, stays mounted after sheet dismiss)
+            // instead of 'ctx' (modal scope, disposed after pop).
+            final timer = context.read<FocusTimerProvider>();
+            if (timer.isRunning && timer.elapsedSeconds > 0) {
+              await timer.stopTimer();
+              if (context.mounted) {
+                await context.read<StudyProvider>().loadAll();
+              }
+              timer.notifyStop();
+            }
+          },
+          child: StatefulBuilder(
           builder: (ctx, setSheetState) {
             final timer = ctx.watch<FocusTimerProvider>();
             // Read completed status inside the builder so it re-evaluates on every rebuild
@@ -1301,7 +1316,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             );
           },
-        );
+        ),
+        ); // PopScope
       },
     );
   }
