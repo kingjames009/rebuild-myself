@@ -279,14 +279,20 @@ class EliteProvider extends ChangeNotifier {
     notifyListeners();
     final db = await DatabaseHelper().db;
     final habitRows = await db.query('elite_habit_lib');
-    final planRows =
-        await db.query('daily_model_plan', orderBy: 'time_period');
+    // Only load today's plans — loading all historical rows causes O(n)
+    // slowdown after weeks of use (each day adds 15–25 rows).
+    final todayStr = '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}';
+    final allPlanRows = await db.query('daily_model_plan', orderBy: 'time_period');
+    final planRows = allPlanRows.where((r) {
+      final d = (r['planDate'] ?? r['plan_date'] ?? '').toString();
+      return d == todayStr;
+    }).toList();
     final checkRows =
         await db.query('daily_compare_check', orderBy: 'create_time DESC');
     _habits = habitRows.map((r) => EliteHabit.fromJson(r)).toList();
     _checks = checkRows.map((r) => DailyCompareCheck.fromJson(r)).toList();
 
-    // Deduplicate plans: same planDate + timePeriod → keep the one with actualNote
+    // Deduplicate today's plans: same planDate + timePeriod → keep the one with actualNote
     final groups = <String, List<Map<String, dynamic>>>{};
     for (final r in planRows) {
       final pDate = (r['planDate'] ?? r['plan_date'] ?? '').toString();
@@ -298,18 +304,15 @@ class EliteProvider extends ChangeNotifier {
       if (entry.value.length == 1) {
         deduped.add(entry.value.first);
       } else {
-        // Multiple rows — pick the one with actualNote, delete others
         entry.value.sort((a, b) {
           final noteA = (a['actualNote'] ?? a['actual_note'] ?? '').toString();
           final noteB = (b['actualNote'] ?? b['actual_note'] ?? '').toString();
-          return noteB.length.compareTo(noteA.length); // longer note first
+          return noteB.length.compareTo(noteA.length);
         });
         final best = entry.value.first;
         final parts = entry.key.split('|');
-        // Delete all duplicates for this planDate + timePeriod
         await db.delete('daily_model_plan',
             where: 'planDate = ? AND timePeriod = ?', whereArgs: [parts[0], parts[1]]);
-        // Re-insert only the best row
         await db.insert('daily_model_plan', best);
         deduped.add(best);
       }

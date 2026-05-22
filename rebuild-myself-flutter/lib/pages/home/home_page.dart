@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
@@ -20,36 +21,58 @@ import '../../services/notification_service.dart';
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
+  /// Increment to signal that the home tab has been selected and data should reload.
+  static final ValueNotifier<int> tabSelected = ValueNotifier<int>(0);
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _onboardingShown = false;
+  int _lastTabSignal = 0;
+  Timer? _focusRefreshTimer;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     NotificationService.init();
+    HomePage.tabSelected.addListener(_onTabSelected);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await SyncService().syncAll();
       await _loadData();
       if (mounted) await _checkMorningCheckIn();
       if (mounted) _checkOnboarding();
     });
+    // Refresh current-focus card every 30s so it tracks time-slot transitions
+    // without depending on FocusTimerProvider's ticking (only runs when active).
+    _focusRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
+    _focusRefreshTimer?.cancel();
+    HomePage.tabSelected.removeListener(_onTabSelected);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  void _onTabSelected() {
+    if (!mounted) return;
+    if (HomePage.tabSelected.value == _lastTabSignal) return;
+    _lastTabSignal = HomePage.tabSelected.value;
+    _loadData();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _sendCurrentTaskNotification();
+    } else if (state == AppLifecycleState.resumed) {
+      _loadData();
     }
   }
 
@@ -95,7 +118,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final now = DateTime.now();
     final dateStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    // Check server for today's plans and merge into local DB
+    // Load local data first so the UI is responsive immediately.
+    // Server sync runs in background and merges results afterward.
+    await context.read<GoalProvider>().loadAll();
+    await context.read<RecordProvider>().loadByDate(dateStr);
+    await context.read<FinanceProvider>().loadAll();
+    await context.read<StudyProvider>().loadAll();
+    await context.read<EliteProvider>().loadAll();
+
+    // Sync server plans in background (don't block the UI)
     final api = ApiClient();
     if (api.hasToken) {
       try {
@@ -111,16 +142,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             data['synced'] = 1;
             await db.insert('daily_model_plan', data);
           }
+          // Reload to pick up server-merged plans
+          if (mounted) await context.read<EliteProvider>().loadAll();
         }
       } catch (_) {}
     }
-
-    // Load all local data (includes morning check-in via EliteProvider.loadAll)
-    await context.read<GoalProvider>().loadAll();
-    await context.read<RecordProvider>().loadByDate(dateStr);
-    await context.read<FinanceProvider>().loadAll();
-    await context.read<StudyProvider>().loadAll();
-    await context.read<EliteProvider>().loadAll();
   }
 
   void _checkOnboarding() {
@@ -692,6 +718,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 }
                 final sortedPlans = List<DailyModelPlan>.from(plans)
                   ..sort((a, b) => (a.timePeriod ?? '').compareTo(b.timePeriod ?? ''));
+                final nowMin = DateTime.now().hour * 60 + DateTime.now().minute;
+                int? currentIndex;
+                for (int i = 0; i < sortedPlans.length; i++) {
+                  final parts = (sortedPlans[i].timePeriod ?? '').split('-');
+                  if (parts.length != 2) continue;
+                  final s = _parseMinutesStr(parts[0]);
+                  final e = _parseMinutesStr(parts[1]);
+                  if (s != null && e != null && nowMin >= s && nowMin < e) {
+                    currentIndex = i;
+                    break;
+                  }
+                }
                 return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
@@ -719,6 +757,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         final existingNote = p.actualNote;
                         final hasNote = existingNote != null && existingNote.isNotEmpty;
                         final completed = p.isCompleted == 1;
+                        final isCurrent = i == currentIndex;
                         return Container(
                           key: ValueKey('${p.planDate}_${p.timePeriod}'),
                           padding: const EdgeInsets.only(bottom: 6),
@@ -726,17 +765,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 10, horizontal: 12),
                             decoration: BoxDecoration(
-                              color: completed
-                                  ? AppTheme.success.withValues(alpha: 0.04)
-                                  : hasNote
+                              color: isCurrent
+                                  ? AppTheme.primary.withValues(alpha: 0.08)
+                                  : completed
                                       ? AppTheme.success.withValues(alpha: 0.04)
-                                      : AppTheme.primary.withValues(alpha: 0.02),
+                                      : hasNote
+                                          ? AppTheme.success.withValues(alpha: 0.04)
+                                          : AppTheme.primary.withValues(alpha: 0.02),
                               borderRadius: BorderRadius.circular(8),
-                              border: (completed || hasNote)
-                                  ? Border.all(
-                                      color:
-                                          AppTheme.success.withValues(alpha: 0.15))
-                                  : null,
+                              border: isCurrent
+                                  ? Border.all(color: AppTheme.primary.withValues(alpha: 0.3))
+                                  : (completed || hasNote)
+                                      ? Border.all(color: AppTheme.success.withValues(alpha: 0.15))
+                                      : null,
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
