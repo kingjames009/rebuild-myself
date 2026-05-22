@@ -1165,6 +1165,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     final mins = await timer.stopTimer();
                                     if (ctx.mounted) {
                                       await context.read<StudyProvider>().loadAll();
+                                      timer.notifyStop();
                                       ScaffoldMessenger.of(ctx).showSnackBar(
                                         SnackBar(
                                           content: Text('专注 $mins 分钟已计入学习时长 ✨'),
@@ -1204,6 +1205,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       final mins = await timer.stopTimer();
                                       if (ctx.mounted) {
                                         await context.read<StudyProvider>().loadAll();
+                                        timer.notifyStop();
                                         ScaffoldMessenger.of(ctx).showSnackBar(
                                           SnackBar(
                                             content: Text('专注 $mins 分钟已计入学习时长 ✨'),
@@ -1222,6 +1224,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   child: GestureDetector(
                                     onTap: () {
                                       timer.cancelTimer();
+                                      timer.notifyStop();
                                       setSheetState(() {});
                                     },
                                     child: const Text('放弃计时', style: TextStyle(fontSize: 11, color: Colors.white60)),

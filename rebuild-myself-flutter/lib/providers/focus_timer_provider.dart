@@ -135,7 +135,17 @@ class FocusTimerProvider extends ChangeNotifier {
   Future<void> restoreSession() async {
     final db = await DatabaseHelper().db;
     final rows = await db.query('timer_session');
-    if (rows.isEmpty) return;
+    if (rows.isEmpty) {
+      // No persisted session. If in-memory state is still running
+      // (e.g. from auto-save that cleared the session but didn't
+      // reset state), clean it up so the MiniStat doesn't double-count.
+      if (_isRunning) {
+        _isRunning = false;
+        _isPaused = false;
+        _accumulatedSeconds = 0;
+      }
+      return;
+    }
     final r = rows.first;
 
     final sessionDate =
@@ -253,6 +263,10 @@ class FocusTimerProvider extends ChangeNotifier {
 
   /// Stop and save elapsed time as a study record.
   /// Returns the minutes saved.
+  /// Does NOT call notifyListeners — the caller must sequence:
+  /// 1. stopTimer() — save to DB, clear session, reset state
+  /// 2. StudyProvider.loadAll() — load new record into memory
+  /// 3. notifyStop() — now the MiniStat sees correct data
   Future<int> stopTimer() async {
     if (!_isRunning) return 0;
 
@@ -283,7 +297,7 @@ class FocusTimerProvider extends ChangeNotifier {
       );
     }
 
-    // Now clear in-memory state and persisted session.
+    // Clear in-memory state and persisted session.
     await _clearSession();
     _isRunning = false;
     _isPaused = false;
@@ -294,10 +308,15 @@ class FocusTimerProvider extends ChangeNotifier {
     _startedAt = null;
     _accumulatedSeconds = 0;
     _targetSeconds = 25 * 60;
-    notifyListeners();
+    // notifyListeners() deliberately NOT called here —
+    // the caller must load StudyProvider first, then call notifyStop().
 
     return mins;
   }
+
+  /// Public wrapper for notifyListeners. Called after stopTimer() +
+  /// StudyProvider.loadAll() so the MiniStat rebuilds with correct totals.
+  void notifyStop() => notifyListeners();
 
   /// Cancel timer without saving. Only used for explicit user
   /// cancellation (the "放弃计时" button).
@@ -313,7 +332,8 @@ class FocusTimerProvider extends ChangeNotifier {
     _accumulatedSeconds = 0;
     _targetSeconds = 25 * 60;
     _clearSession();
-    notifyListeners();
+    // notifyListeners() deliberately NOT called here —
+    // the caller should call notifyStop() after any needed cleanup.
   }
 
   /// Auto-save when countdown reaches 0 — no user action needed.
