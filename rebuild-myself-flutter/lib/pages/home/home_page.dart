@@ -1218,16 +1218,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   ),
                                 ],
                               ),
-                              if (timer.isPaused)
+                              if (timer.isPaused && !timer.isCompleted)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: GestureDetector(
-                                    onTap: () {
-                                      timer.cancelTimer();
+                                    onTap: () async {
+                                      await timer.stopTimer();
+                                      if (ctx.mounted) {
+                                        await context.read<StudyProvider>().loadAll();
+                                      }
                                       timer.notifyStop();
                                       setSheetState(() {});
                                     },
-                                    child: const Text('放弃计时', style: TextStyle(fontSize: 11, color: Colors.white60)),
+                                    child: const Text('放弃计时（已累积时间仍会保存）', style: TextStyle(fontSize: 11, color: Colors.white60)),
                                   ),
                                 ),
                             ],
