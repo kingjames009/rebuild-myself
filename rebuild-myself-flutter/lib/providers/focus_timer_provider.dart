@@ -7,16 +7,16 @@ import '../services/api_client.dart';
 class FocusTimerProvider extends ChangeNotifier {
   bool _isRunning = false;
   bool _isPaused = false;
-  int _targetSeconds = 25 * 60; // default 25 min
+  bool _autoSaved = false; // true after _autoSaveCompleted prevents duplicate saves
+  int _targetSeconds = 25 * 60;
   String? _planDate;
   String? _timePeriod;
   String? _planContent;
   String _trackType = 'ai';
   Timer? _ticker;
 
-  // Wall-clock based timing — survives background/screen-off
   DateTime? _startedAt;
-  int _accumulatedSeconds = 0; // elapsed before last pause
+  int _accumulatedSeconds = 0;
 
   bool get isRunning => _isRunning;
   bool get isPaused => _isPaused;
@@ -26,7 +26,6 @@ class FocusTimerProvider extends ChangeNotifier {
   String? get planContent => _planContent;
   String get trackType => _trackType;
 
-  /// True elapsed seconds from wall clock
   int get elapsedSeconds {
     if (!_isRunning) return 0;
     if (_isPaused) return _accumulatedSeconds;
@@ -36,13 +35,11 @@ class FocusTimerProvider extends ChangeNotifier {
     return (_accumulatedSeconds + since).clamp(0, _targetSeconds);
   }
 
-  /// Remaining seconds from wall clock
   int get remainingSeconds {
     if (!_isRunning) return 0;
     return (_targetSeconds - elapsedSeconds).clamp(0, _targetSeconds);
   }
 
-  /// Remaining time formatted as MM:SS or HH:MM:SS
   String get formattedTime {
     final total = remainingSeconds;
     final h = total ~/ 3600;
@@ -54,7 +51,6 @@ class FocusTimerProvider extends ChangeNotifier {
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
-  /// Elapsed time formatted as MM:SS
   String get formattedElapsed {
     final e = elapsedSeconds;
     final h = e ~/ 3600;
@@ -72,13 +68,13 @@ class FocusTimerProvider extends ChangeNotifier {
     return '$m分钟';
   }
 
-  /// Progress: 0 = not started, 1 = fully used
   double get progress {
     if (_targetSeconds <= 0) return 0;
     return (elapsedSeconds / _targetSeconds).clamp(0.0, 1.0);
   }
 
-  bool get isCompleted => _isRunning && remainingSeconds <= 0 && _targetSeconds > 0;
+  bool get isCompleted =>
+      _isRunning && remainingSeconds <= 0 && _targetSeconds > 0;
 
   bool matchesPlan(String date, String period) {
     return _isRunning && _planDate == date && _timePeriod == period;
@@ -94,6 +90,110 @@ class FocusTimerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Session persistence ──────────────────────────────────────────
+  // Timer state is saved to the timer_session table on every state
+  // change so that app restarts / crashes never lose progress.
+  // The table has at most 1 row (id = 1).
+
+  Future<void> _saveSession() async {
+    final db = await DatabaseHelper().db;
+    await db.delete('timer_session');
+    if (_isRunning) {
+      await db.insert('timer_session', {
+        'id': 1,
+        'planDate': _planDate,
+        'plan_date': _planDate,
+        'timePeriod': _timePeriod,
+        'time_period': _timePeriod,
+        'planContent': _planContent,
+        'plan_content': _planContent,
+        'trackType': _trackType,
+        'track_type': _trackType,
+        'accumulatedSeconds': _accumulatedSeconds,
+        'accumulated_seconds': _accumulatedSeconds,
+        'startedAt': _startedAt?.toIso8601String(),
+        'started_at': _startedAt?.toIso8601String(),
+        'isPaused': _isPaused ? 1 : 0,
+        'is_paused': _isPaused ? 1 : 0,
+        'targetSeconds': _targetSeconds,
+        'target_seconds': _targetSeconds,
+      });
+    }
+  }
+
+  Future<void> _clearSession() async {
+    final db = await DatabaseHelper().db;
+    await db.delete('timer_session');
+  }
+
+  /// Public — called by the home page on app lifecycle pause to
+  /// persist the current timer state before the app goes to background.
+  Future<void> persistSession() => _saveSession();
+
+  /// Called once after the provider is created to restore any
+  /// timer session that was interrupted by app close / crash.
+  Future<void> restoreSession() async {
+    final db = await DatabaseHelper().db;
+    final rows = await db.query('timer_session');
+    if (rows.isEmpty) return;
+    final r = rows.first;
+
+    final sessionDate =
+        (r['planDate'] ?? r['plan_date'] ?? '').toString();
+    final now = DateTime.now();
+    final today =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    // Only restore today's session — stale cross-day sessions are discarded.
+    if (sessionDate != today) {
+      await _clearSession();
+      return;
+    }
+
+    _planDate = sessionDate;
+    _timePeriod =
+        (r['timePeriod'] ?? r['time_period'] ?? '').toString();
+    _planContent =
+        (r['planContent'] ?? r['plan_content'] ?? '').toString();
+    _trackType =
+        (r['trackType'] ?? r['track_type'] ?? 'ai').toString();
+    _accumulatedSeconds =
+        (r['accumulatedSeconds'] ?? r['accumulated_seconds'] ?? 0) as int;
+    _targetSeconds =
+        (r['targetSeconds'] ?? r['target_seconds'] ?? 25 * 60) as int;
+
+    final isPausedVal = r['isPaused'] ?? r['is_paused'] ?? 0;
+    _isPaused = isPausedVal == 1 || isPausedVal == true;
+
+    final startedAtStr =
+        (r['startedAt'] ?? r['started_at'] ?? '').toString();
+    if (startedAtStr.isNotEmpty) {
+      _startedAt = DateTime.tryParse(startedAtStr);
+    }
+
+    _isRunning = true;
+
+    // If the session was actively running (not paused), advance
+    // elapsed by the wall-clock gap and reset the anchor.
+    if (!_isPaused && _startedAt != null) {
+      final wallDiff =
+          DateTime.now().difference(_startedAt!).inSeconds;
+      _accumulatedSeconds =
+          (_accumulatedSeconds + wallDiff).clamp(0, _targetSeconds);
+      _startedAt = DateTime.now();
+      _startTicking();
+    }
+
+    if (mounted) notifyListeners();
+  }
+
+  /// Whether this ChangeNotifier is still attached to listeners.
+  /// (ChangeNotifier doesn't expose this, so we use a simple flag.)
+  bool _mounted = true;
+  bool get mounted => _mounted;
+
+  // ── Timer logic ──────────────────────────────────────────────────
+
   void startTimer({
     required int minutes,
     required String planDate,
@@ -108,18 +208,20 @@ class FocusTimerProvider extends ChangeNotifier {
     _planContent = planContent;
     _isRunning = true;
     _isPaused = false;
+    _autoSaved = false;
     _startTicking();
     notifyListeners();
+    _saveSession();
   }
 
   void _startTicking() {
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (remainingSeconds <= 0 && _targetSeconds > 0) {
-        // Auto-pause when countdown reaches 0
         _accumulatedSeconds = _targetSeconds;
         _isPaused = true;
         _ticker?.cancel();
+        _autoSaveCompleted();
       }
       notifyListeners();
     });
@@ -127,14 +229,17 @@ class FocusTimerProvider extends ChangeNotifier {
 
   void pauseTimer() {
     if (!_isRunning || _isPaused) return;
-    // Accumulate elapsed since last start
     if (_startedAt != null) {
-      _accumulatedSeconds += DateTime.now().difference(_startedAt!).inSeconds;
-      if (_accumulatedSeconds > _targetSeconds) _accumulatedSeconds = _targetSeconds;
+      _accumulatedSeconds +=
+          DateTime.now().difference(_startedAt!).inSeconds;
+      if (_accumulatedSeconds > _targetSeconds) {
+        _accumulatedSeconds = _targetSeconds;
+      }
     }
     _isPaused = true;
     _ticker?.cancel();
     notifyListeners();
+    _saveSession();
   }
 
   void resumeTimer() {
@@ -143,23 +248,46 @@ class FocusTimerProvider extends ChangeNotifier {
     _isPaused = false;
     _startTicking();
     notifyListeners();
+    _saveSession();
   }
 
-  /// Stop and save elapsed time as study record. Returns the minutes saved.
+  /// Stop and save elapsed time as a study record.
+  /// Returns the minutes saved.
   Future<int> stopTimer() async {
     if (!_isRunning) return 0;
-    // Finalize elapsed from wall clock
+
     if (!_isPaused && _startedAt != null) {
-      _accumulatedSeconds += DateTime.now().difference(_startedAt!).inSeconds;
+      _accumulatedSeconds +=
+          DateTime.now().difference(_startedAt!).inSeconds;
     }
-    if (_accumulatedSeconds > _targetSeconds) _accumulatedSeconds = _targetSeconds;
+    if (_accumulatedSeconds > _targetSeconds) {
+      _accumulatedSeconds = _targetSeconds;
+    }
     _ticker?.cancel();
-    _isRunning = false;
-    _isPaused = false;
+
     final mins = _accumulatedSeconds ~/ 60;
     final date = _planDate;
     final content = _planContent;
     final track = _trackType;
+    final period = _timePeriod;
+
+    // Save to study_track_record BEFORE clearing in-memory state,
+    // unless _autoSaveCompleted already did it (prevents duplicates).
+    if (!_autoSaved && mins > 0 && date != null) {
+      await _saveStudyRecord(
+        trackType: track,
+        content: content ?? '专注计时学习',
+        minutes: mins,
+        date: date,
+        period: period,
+      );
+    }
+
+    // Now clear in-memory state and persisted session.
+    await _clearSession();
+    _isRunning = false;
+    _isPaused = false;
+    _autoSaved = false;
     _planDate = null;
     _timePeriod = null;
     _planContent = null;
@@ -168,74 +296,101 @@ class FocusTimerProvider extends ChangeNotifier {
     _targetSeconds = 25 * 60;
     notifyListeners();
 
-    if (mins > 0 && date != null) {
-      final record = StudyTrackRecord(
-        trackType: track,
-        studyContent: content ?? '专注计时学习',
-        studyMinutes: mins,
-        difficultyLevel: 3,
-        escapeStatus: 0,
-        recordDate: date,
-      );
-
-      final db = await DatabaseHelper().db;
-      await db.insert('study_track_record', record.toJson());
-
-      // Mark the corresponding daily plan as completed
-      final period = _timePeriod;
-      if (period != null) {
-        await db.update('daily_model_plan', {
-          'isCompleted': 1,
-          'is_completed': 1,
-          'completedAt': DateTime.now().toIso8601String(),
-          'completed_at': DateTime.now().toIso8601String(),
-        }, where: 'planDate = ? AND timePeriod = ?', whereArgs: [date, period]);
-        await db.update('daily_model_plan', {
-          'isCompleted': 1,
-          'is_completed': 1,
-          'completedAt': DateTime.now().toIso8601String(),
-          'completed_at': DateTime.now().toIso8601String(),
-        }, where: 'plan_date = ? AND time_period = ?', whereArgs: [date, period]);
-      }
-
-      final api = ApiClient();
-      if (api.hasToken) {
-        try {
-          await api.post('/study/add', data: {
-            'trackType': track,
-            'content': content ?? '专注计时学习',
-            'minutes': mins,
-            'difficulty': 3,
-            'escapeStatus': false,
-            'date': date,
-          });
-        } catch (_) {}
-      }
-
-      return mins;
-    }
-    return 0;
+    return mins;
   }
 
-  /// Cancel timer without saving
+  /// Cancel timer without saving. Only used for explicit user
+  /// cancellation (the "放弃计时" button).
   void cancelTimer() {
     _ticker?.cancel();
     _isRunning = false;
     _isPaused = false;
+    _autoSaved = false;
     _planDate = null;
     _timePeriod = null;
     _planContent = null;
     _startedAt = null;
     _accumulatedSeconds = 0;
     _targetSeconds = 25 * 60;
+    _clearSession();
     notifyListeners();
   }
 
-  /// Total elapsed minutes today (live, for home page stat)
+  /// Auto-save when countdown reaches 0 — no user action needed.
+  /// The time is already earned; don't make the user confirm it.
+  Future<void> _autoSaveCompleted() async {
+    _autoSaved = true;
+    final mins = _accumulatedSeconds ~/ 60;
+    if (mins > 0 && _planDate != null) {
+      await _saveStudyRecord(
+        trackType: _trackType,
+        content: _planContent ?? '专注计时学习',
+        minutes: mins,
+        date: _planDate!,
+        period: _timePeriod,
+      );
+    }
+    await _clearSession();
+    notifyListeners();
+  }
+
+  /// Shared helper: insert a study record, mark plan completed, sync.
+  Future<void> _saveStudyRecord({
+    required String trackType,
+    required String content,
+    required int minutes,
+    required String date,
+    String? period,
+  }) async {
+    final record = StudyTrackRecord(
+      trackType: trackType,
+      studyContent: content,
+      studyMinutes: minutes,
+      difficultyLevel: 3,
+      escapeStatus: 0,
+      recordDate: date,
+    );
+
+    final db = await DatabaseHelper().db;
+    await db.insert('study_track_record', record.toJson());
+
+    // Mark the corresponding daily plan as completed.
+    if (period != null) {
+      final done = {
+        'isCompleted': 1,
+        'is_completed': 1,
+        'completedAt': DateTime.now().toIso8601String(),
+        'completed_at': DateTime.now().toIso8601String(),
+      };
+      await db.update('daily_model_plan', done,
+          where: 'planDate = ? AND timePeriod = ?',
+          whereArgs: [date, period]);
+      await db.update('daily_model_plan', done,
+          where: 'plan_date = ? AND time_period = ?',
+          whereArgs: [date, period]);
+    }
+
+    // Background sync to server.
+    final api = ApiClient();
+    if (api.hasToken) {
+      try {
+        await api.post('/study/add', data: {
+          'trackType': trackType,
+          'content': content,
+          'minutes': minutes,
+          'difficulty': 3,
+          'escapeStatus': false,
+          'date': date,
+        });
+      } catch (_) {}
+    }
+  }
+
   int get todayElapsedMinutes => _isRunning ? elapsedSeconds ~/ 60 : 0;
 
   @override
   void dispose() {
+    _mounted = false;
     _ticker?.cancel();
     super.dispose();
   }

@@ -71,6 +71,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _sendCurrentTaskNotification();
+      context.read<FocusTimerProvider>().persistSession();
     } else if (state == AppLifecycleState.resumed) {
       _loadData();
     }
@@ -125,6 +126,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await context.read<FinanceProvider>().loadAll();
     await context.read<StudyProvider>().loadAll();
     await context.read<EliteProvider>().loadAll();
+    await context.read<FocusTimerProvider>().restoreSession();
 
     // Sync server plans in background (don't block the UI)
     final api = ApiClient();
