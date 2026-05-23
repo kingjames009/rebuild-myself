@@ -36,18 +36,12 @@ class _ElitePageState extends State<ElitePage> {
   final _customCtrl = TextEditingController();
   String _customSegment = '下班后';
 
-  int _essentialTab = 0; // 0=all, 1-5 categories
-
   // Collapsible sections
   bool _showCustomPriority = false;
   bool _showAdvancedBlocks = false;
   bool _showEssentials = false;
 
   static const _categoryLabels = ['晨间', '日间', '下班后', '睡前'];
-  static const _planTypeLabels = {
-    1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 0: '未分类'
-  };
-
   @override
   void initState() {
     super.initState();
@@ -68,11 +62,6 @@ class _ElitePageState extends State<ElitePage> {
   String get _dateStr {
     final d = _selectedDate;
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-  }
-
-  String _today() {
-    final n = DateTime.now();
-    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
   void _prevDate() {
@@ -116,39 +105,6 @@ class _ElitePageState extends State<ElitePage> {
     }
   }
 
-  Future<void> _generatePlan() async {
-    final p = context.read<EliteProvider>();
-    final today = _today();
-    final goalProv = context.read<GoalProvider>();
-    final todayTasks = goalProv.tasks
-        .where((t) => t.taskDate == today && t.isComplete != 1)
-        .toList();
-    try {
-      await p.saveWorkSchedule(WorkSchedule(
-        workStart: _workStart,
-        workEnd: _workEnd,
-        lunchStart: _lunchStart,
-        lunchEnd: _lunchEnd,
-        studyStart: _studyStart,
-        studyEnd: _studyEnd,
-      ));
-      await p.generateTodayPlanWithAI(today, todayTasks, goals: goalProv.goals);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('已生成全天计划（${p.plans.where((pl) => pl.planDate == today).length}项）'),
-              duration: const Duration(seconds: 2)),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('生成失败: $e'), backgroundColor: AppTheme.danger),
-        );
-      }
-    }
-  }
-
   void _submitCheck() {
     if (_deviationCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -189,8 +145,6 @@ class _ElitePageState extends State<ElitePage> {
     }
   }
 
-  String _typeLabel(int? t) => _planTypeLabels[t] ?? '综合';
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -199,8 +153,6 @@ class _ElitePageState extends State<ElitePage> {
         builder: (_, p, __) {
           _syncWorkScheduleFromProvider(p);
 
-          final todayPlans =
-              p.plans.where((plan) => plan.planDate == _dateStr).toList();
           final catHabits =
               p.habits.where((h) => h.habitCategory == _habitCategory).toList();
 
@@ -249,121 +201,7 @@ class _ElitePageState extends State<ElitePage> {
                 ),
                 const SizedBox(height: 8),
 
-                // Section 1: Today's Model Plan
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('📋 今日模范计划',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 8),
-                        if (todayPlans.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 24),
-                            child: Center(
-                                child: Text(
-                                    '暂无计划，先设置工作时间再生成\n覆盖上班前、上班时、午休、下班后全天时段',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: AppTheme.textMuted))),
-                          )
-                        else
-                          ...todayPlans.map((plan) => Padding(
-                                padding: const EdgeInsets.only(bottom: 4),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    const Divider(height: 1),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Text(plan.timePeriod ?? '',
-                                            style: const TextStyle(
-                                                fontSize: 13,
-                                                color: AppTheme.textSecondary,
-                                                fontWeight: FontWeight.w500)),
-                                        const SizedBox(width: 8),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(
-                                              color: const Color(0xFFE8F8F5),
-                                              borderRadius:
-                                                  BorderRadius.circular(6)),
-                                          child: Text(
-                                              _typeLabel(plan.planType),
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: AppTheme.success)),
-                                        ),
-                                        const SizedBox(width: 4),
-                                        ...List.generate(
-                                            plan.difficulty ?? 1,
-                                            (_) => const Text('★',
-                                                style: TextStyle(
-                                                    fontSize: 12,
-                                                    color:
-                                                        AppTheme.warning))),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(plan.planContent ?? '',
-                                        style: const TextStyle(
-                                            fontSize: 15,
-                                            color: AppTheme.textPrimary)),
-                                  ],
-                                ),
-                              )),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                // Section 2: Generate + Clear
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: p.generating ? null : _generatePlan,
-                    icon: p.generating
-                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Text('✨', style: TextStyle(fontSize: 16)),
-                    label: Text(p.generating ? '生成中...' : '生成今日计划'),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  height: 36,
-                  child: OutlinedButton(
-                    onPressed: () async {
-                      await context
-                          .read<EliteProvider>()
-                          .clearPlansForDate(_dateStr);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text('已清空今日计划'),
-                              duration: Duration(seconds: 1)),
-                        );
-                      }
-                    },
-                    style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.textSecondary),
-                    child: const Text('清空今日计划',
-                        style: TextStyle(fontSize: 13)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                const SizedBox(height: 10),
-
-                // Section 4: Life Essentials (生活必备项)
+                // Section: Life Essentials (生活必备项)
                 _buildEssentialsCard(),
                 const SizedBox(height: 10),
 

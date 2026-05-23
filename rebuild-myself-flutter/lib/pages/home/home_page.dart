@@ -523,6 +523,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
   }
 
+  Future<void> _generateTodayPlan(EliteProvider elite, String dateStr) async {
+    final goalProv = context.read<GoalProvider>();
+    final todayTasks = goalProv.tasks
+        .where((t) => t.taskDate == dateStr && t.isComplete != 1)
+        .toList();
+    try {
+      await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已生成${elite.plans.where((pl) => pl.planDate == dateStr).length}项今日规划'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('生成失败: $e'), backgroundColor: AppTheme.danger),
+        );
+      }
+    }
+  }
+
   String _weekday() {
     const w = ['日', '一', '二', '三', '四', '五', '六'];
     return '星期${w[DateTime.now().weekday % 7]}';
@@ -679,13 +703,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 20),
 
             // ---- Today's Plan (from EliteProvider) ----
-            const Text('今日规划', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('今日规划', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                Consumer<EliteProvider>(
+                  builder: (_, elite, __) {
+                    final dateStr = _todayDash();
+                    return SizedBox(
+                      height: 34,
+                      child: ElevatedButton.icon(
+                        onPressed: elite.generating
+                            ? null
+                            : () => _generateTodayPlan(elite, dateStr),
+                        icon: elite.generating
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('✨', style: TextStyle(fontSize: 14)),
+                        label: Text(elite.generating ? '生成中' : '生成', style: const TextStyle(fontSize: 13)),
+                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: 10),
             Consumer<EliteProvider>(
               builder: (_, elite, __) {
-                final now = DateTime.now();
-                final dateStr =
-                    '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                final dateStr = _todayDash();
                 final plans = elite.plans
                     .where((p) => p.planDate == dateStr)
                     .toList();
@@ -693,46 +738,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Column(
-                        children: [
-                          const Text('暂无今日规划',
-                              style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 42,
-                            child: ElevatedButton.icon(
-                              onPressed: elite.generating
-                                  ? null
-                                  : () async {
-                                final goalProv = context.read<GoalProvider>();
-                                final todayTasks = goalProv.tasks
-                                    .where((t) => t.taskDate == dateStr && t.isComplete != 1)
-                                    .toList();
-                                try {
-                                  await elite.generateTodayPlanWithAI(dateStr, todayTasks, goals: goalProv.goals);
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                          content: Text('已生成${elite.plans.where((pl) => pl.planDate == dateStr).length}项今日规划'),
-                                          duration: const Duration(seconds: 2)),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('生成失败: $e'), backgroundColor: AppTheme.danger),
-                                    );
-                                  }
-                                }
-                              },
-                              icon: elite.generating
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('✨', style: TextStyle(fontSize: 16)),
-                              label: Text(elite.generating ? '生成中...' : '生成今日计划'),
-                            ),
-                          ),
-                        ],
+                      child: Center(
+                        child: Text('暂无今日规划，点击上方「✨ 生成」一键创建',
+                            style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
                       ),
                     ),
                   );
