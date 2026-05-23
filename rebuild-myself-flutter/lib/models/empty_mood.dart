@@ -30,6 +30,17 @@ class EmptyMoodLog {
         createTime: json['createTime'] ?? json['create_time'],
       );
 
+  EmptyMoodLog copyWith({int? id}) => EmptyMoodLog(
+        id: id ?? this.id,
+        userId: userId,
+        emptyLevel: emptyLevel,
+        emptyHours: emptyHours,
+        triggerCause: triggerCause,
+        wasteHours: wasteHours,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   Map<String, dynamic> toJson() => {
         if (emptyLevel != null) 'emptyLevel': emptyLevel,
         if (emptyHours != null) 'emptyHours': emptyHours,

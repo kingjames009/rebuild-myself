@@ -52,7 +52,13 @@ class AspirationProvider extends ChangeNotifier {
     if (!api.hasToken) return false;
     final resp = await api.post('/aspiration', data: a.toJson());
     if (resp.ok) {
-      await loadAspirations();
+      if (resp.data is Map) {
+        _aspirations.insert(0, UserAspiration.fromJson(resp.data as Map<String, dynamic>));
+      } else {
+        await loadAspirations();
+        return true;
+      }
+      notifyListeners();
       return true;
     }
     return false;
@@ -63,7 +69,8 @@ class AspirationProvider extends ChangeNotifier {
     if (!api.hasToken) return false;
     final resp = await api.delete('/aspiration/$id');
     if (resp.ok) {
-      await loadAspirations();
+      _aspirations.removeWhere((a) => a.id == id);
+      notifyListeners();
       return true;
     }
     return false;
@@ -74,7 +81,13 @@ class AspirationProvider extends ChangeNotifier {
     if (!api.hasToken) return false;
     final resp = await api.put('/essential/$id/toggle', data: {'enabled': enabled});
     if (resp.ok) {
-      await loadEssentials();
+      for (int i = 0; i < _essentials.length; i++) {
+        if (_essentials[i].id == id) {
+          _essentials[i] = _essentials[i].copyWith(enabled: enabled);
+          break;
+        }
+      }
+      notifyListeners();
       return true;
     }
     return false;

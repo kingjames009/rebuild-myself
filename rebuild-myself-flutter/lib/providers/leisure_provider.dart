@@ -35,19 +35,24 @@ class LeisureProvider extends ChangeNotifier {
 
   Future<void> add(LifeLeisureRecord record) async {
     final db = await DatabaseHelper().db;
-    await db.insert('life_leisure_record', record.toJson());
-    await loadAll();
+    final newId = await db.insert('life_leisure_record', record.toJson());
+    _records.insert(0, record.copyWith(id: newId));
+    notifyListeners();
   }
 
   Future<void> update(LifeLeisureRecord record) async {
     final db = await DatabaseHelper().db;
     await db.update('life_leisure_record', record.toJson(), where: 'id = ?', whereArgs: [record.id]);
-    await loadAll();
+    for (int i = 0; i < _records.length; i++) {
+      if (_records[i].id == record.id) { _records[i] = record; break; }
+    }
+    notifyListeners();
   }
 
   Future<void> delete(int id) async {
     final db = await DatabaseHelper().db;
     await db.delete('life_leisure_record', where: 'id = ?', whereArgs: [id]);
-    await loadAll();
+    _records.removeWhere((r) => r.id == id);
+    notifyListeners();
   }
 }

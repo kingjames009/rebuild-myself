@@ -31,19 +31,24 @@ class SidelineProvider extends ChangeNotifier {
 
   Future<void> add(SidelinePlan plan) async {
     final db = await DatabaseHelper().db;
-    await db.insert('sideline_plan', plan.toJson());
-    await loadAll();
+    final newId = await db.insert('sideline_plan', plan.toJson());
+    _plans.insert(0, plan.copyWith(id: newId));
+    notifyListeners();
   }
 
   Future<void> update(SidelinePlan plan) async {
     final db = await DatabaseHelper().db;
     await db.update('sideline_plan', plan.toJson(), where: 'id = ?', whereArgs: [plan.id]);
-    await loadAll();
+    for (int i = 0; i < _plans.length; i++) {
+      if (_plans[i].id == plan.id) { _plans[i] = plan; break; }
+    }
+    notifyListeners();
   }
 
   Future<void> delete(int id) async {
     final db = await DatabaseHelper().db;
     await db.delete('sideline_plan', where: 'id = ?', whereArgs: [id]);
-    await loadAll();
+    _plans.removeWhere((p) => p.id == id);
+    notifyListeners();
   }
 }

@@ -15,6 +15,10 @@ class FocusTimerProvider extends ChangeNotifier {
   String _trackType = 'ai';
   Timer? _ticker;
 
+  /// Incremented every second while the timer is running.
+  /// UI uses ListenableBuilder on this to scope rebuilds to timer display only.
+  final ValueNotifier<int> tick = ValueNotifier<int>(0);
+
   DateTime? _startedAt;
   int _accumulatedSeconds = 0;
 
@@ -248,9 +252,10 @@ class FocusTimerProvider extends ChangeNotifier {
         _accumulatedSeconds = _targetSeconds;
         _isPaused = true;
         _ticker?.cancel();
-        _autoSaveCompleted();
+        _autoSaveCompleted(); // calls notifyListeners()
+        return;
       }
-      notifyListeners();
+      tick.value++; // Only trigger ValueNotifier, not full rebuild
     });
   }
 
@@ -429,6 +434,7 @@ class FocusTimerProvider extends ChangeNotifier {
   void dispose() {
     _mounted = false;
     _ticker?.cancel();
+    tick.dispose();
     super.dispose();
   }
 }

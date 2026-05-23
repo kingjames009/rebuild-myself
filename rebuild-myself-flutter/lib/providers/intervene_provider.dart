@@ -29,19 +29,24 @@ class InterveneProvider extends ChangeNotifier {
 
   Future<void> add(BehaviorIntervene i) async {
     final db = await DatabaseHelper().db;
-    await db.insert('behavior_intervene', i.toJson());
-    await loadAll();
+    final newId = await db.insert('behavior_intervene', i.toJson());
+    _intervenes.insert(0, i.copyWith(interveneId: newId));
+    notifyListeners();
   }
 
   Future<void> update(BehaviorIntervene i) async {
     final db = await DatabaseHelper().db;
     await db.update('behavior_intervene', i.toJson(), where: 'intervene_id = ?', whereArgs: [i.interveneId]);
-    await loadAll();
+    for (int j = 0; j < _intervenes.length; j++) {
+      if (_intervenes[j].interveneId == i.interveneId) { _intervenes[j] = i; break; }
+    }
+    notifyListeners();
   }
 
   Future<void> delete(int id) async {
     final db = await DatabaseHelper().db;
     await db.delete('behavior_intervene', where: 'intervene_id = ?', whereArgs: [id]);
-    await loadAll();
+    _intervenes.removeWhere((x) => x.interveneId == id);
+    notifyListeners();
   }
 }

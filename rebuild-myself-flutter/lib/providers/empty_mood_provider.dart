@@ -30,19 +30,24 @@ class EmptyMoodProvider extends ChangeNotifier {
 
   Future<void> add(EmptyMoodLog log) async {
     final db = await DatabaseHelper().db;
-    await db.insert('empty_mood_log', log.toJson());
-    await loadAll();
+    final newId = await db.insert('empty_mood_log', log.toJson());
+    _logs.insert(0, log.copyWith(id: newId));
+    notifyListeners();
   }
 
   Future<void> update(EmptyMoodLog log) async {
     final db = await DatabaseHelper().db;
     await db.update('empty_mood_log', log.toJson(), where: 'id = ?', whereArgs: [log.id]);
-    await loadAll();
+    for (int i = 0; i < _logs.length; i++) {
+      if (_logs[i].id == log.id) { _logs[i] = log; break; }
+    }
+    notifyListeners();
   }
 
   Future<void> delete(int id) async {
     final db = await DatabaseHelper().db;
     await db.delete('empty_mood_log', where: 'id = ?', whereArgs: [id]);
-    await loadAll();
+    _logs.removeWhere((l) => l.id == id);
+    notifyListeners();
   }
 }

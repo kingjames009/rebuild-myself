@@ -34,6 +34,18 @@ class StudyTrackRecord {
         createTime: json['createTime'] ?? json['create_time'],
       );
 
+  StudyTrackRecord copyWith({int? id}) => StudyTrackRecord(
+        id: id ?? this.id,
+        userId: userId,
+        trackType: trackType,
+        studyContent: studyContent,
+        studyMinutes: studyMinutes,
+        difficultyLevel: difficultyLevel,
+        escapeStatus: escapeStatus,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   Map<String, dynamic> toJson() => {
         if (trackType != null) 'trackType': trackType,
         if (studyContent != null) 'content': studyContent,

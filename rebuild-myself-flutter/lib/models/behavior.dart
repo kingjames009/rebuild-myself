@@ -35,6 +35,16 @@ class BehaviorIntervene {
         if (interveneTime != null) 'interveneTime': interveneTime,
       };
 
+  BehaviorIntervene copyWith({int? interveneId}) => BehaviorIntervene(
+        interveneId: interveneId ?? this.interveneId,
+        userId: userId,
+        interveneType: interveneType,
+        interveneTime: interveneTime,
+        isSuccess: isSuccess,
+        moodBefore: moodBefore,
+        createTime: createTime,
+      );
+
   String get typeLabel {
     const map = {1: '拖延矫正', 2: '杂念疏导', 3: '短视频戒断', 4: '懒惰管理'};
     return map[interveneType] ?? '综合';

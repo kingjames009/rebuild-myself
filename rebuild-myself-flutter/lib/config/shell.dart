@@ -40,6 +40,7 @@ class _MainShellState extends State<MainShell> {
   void switchTab(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
+    if (index == 0) HomePage.tabSelected.value++;
   }
 
   @override

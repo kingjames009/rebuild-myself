@@ -35,17 +35,43 @@ class RecordProvider extends ChangeNotifier {
 
   Future<void> add(DailyRecord record) async {
     final resp = await _api.post('/record', data: record.toJson());
-    if (resp.ok) await loadByDate(_selectedDate);
+    if (resp.ok) {
+      if (resp.data is Map) {
+        final created = DailyRecord.fromJson(resp.data as Map<String, dynamic>);
+        if (created.recordDate == _selectedDate) {
+          _records.insert(0, created);
+        }
+      } else {
+        await loadByDate(_selectedDate);
+        return;
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> update(DailyRecord record) async {
     final resp = await _api.put('/record', data: record.toJson());
-    if (resp.ok) await loadByDate(_selectedDate);
+    if (resp.ok) {
+      for (int i = 0; i < _records.length; i++) {
+        if (_records[i].recordId == record.recordId) {
+          if (record.recordDate == _selectedDate) {
+            _records[i] = record;
+          } else {
+            _records.removeAt(i);
+          }
+          break;
+        }
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> delete(int recordId) async {
     final resp = await _api.delete('/record/$recordId');
-    if (resp.ok) await loadByDate(_selectedDate);
+    if (resp.ok) {
+      _records.removeWhere((r) => r.recordId == recordId);
+      notifyListeners();
+    }
   }
 
   int get todayCount {

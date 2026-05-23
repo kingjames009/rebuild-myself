@@ -43,5 +43,17 @@ class FinanceMentalLog {
         if (recordDate != null) 'date': recordDate,
       };
 
+  FinanceMentalLog copyWith({int? id}) => FinanceMentalLog(
+        id: id ?? this.id,
+        userId: userId,
+        moneyPressure: moneyPressure,
+        gapAmount: gapAmount,
+        incomeRecord: incomeRecord,
+        escapeState: escapeState,
+        actionMinutes: actionMinutes,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   bool get isEscaping => escapeState == 1;
 }

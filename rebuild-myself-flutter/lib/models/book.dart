@@ -51,5 +51,18 @@ class BookReadRecord {
     return map[bookType] ?? bookType ?? '未知';
   }
 
+  BookReadRecord copyWith({int? id}) => BookReadRecord(
+        id: id ?? this.id,
+        userId: userId,
+        bookType: bookType,
+        bookName: bookName,
+        readMinutes: readMinutes,
+        readProgress: readProgress,
+        bookNotes: bookNotes,
+        escapeStatus: escapeStatus,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   bool get isEscaped => escapeStatus == 1;
 }

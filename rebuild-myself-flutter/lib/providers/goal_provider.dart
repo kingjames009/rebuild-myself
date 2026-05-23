@@ -44,32 +44,65 @@ class GoalProvider extends ChangeNotifier {
 
   Future<void> addGoal(Goal goal) async {
     final resp = await _api.post('/goal', data: goal.toJson());
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      if (resp.data is Map) {
+        _goals.insert(0, Goal.fromJson(resp.data as Map<String, dynamic>));
+      } else {
+        await loadAll();
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> updateGoal(Goal goal) async {
     final resp = await _api.put('/goal', data: goal.toJson());
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      for (int i = 0; i < _goals.length; i++) {
+        if (_goals[i].goalId == goal.goalId) { _goals[i] = goal; break; }
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> deleteGoal(int goalId) async {
     final resp = await _api.delete('/goal/$goalId');
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      _goals.removeWhere((g) => g.goalId == goalId);
+      notifyListeners();
+    }
   }
 
   Future<void> addTask(TaskTodo task) async {
     final resp = await _api.post('/task', data: task.toJson());
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      if (resp.data is Map) {
+        _tasks.insert(0, TaskTodo.fromJson(resp.data as Map<String, dynamic>));
+      } else {
+        await loadAll();
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> toggleTask(int taskId, bool completed) async {
     final resp = await _api.put('/task/toggle/$taskId');
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      for (int i = 0; i < _tasks.length; i++) {
+        if (_tasks[i].taskId == taskId) {
+          _tasks[i].isComplete = completed ? 1 : 0;
+          break;
+        }
+      }
+      notifyListeners();
+    }
   }
 
   Future<void> deleteTask(int taskId) async {
     final resp = await _api.delete('/task/$taskId');
-    if (resp.ok) await loadAll();
+    if (resp.ok) {
+      _tasks.removeWhere((t) => t.taskId == taskId);
+      notifyListeners();
+    }
   }
 
   String _today() {

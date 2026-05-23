@@ -17,6 +17,7 @@ import '../../services/sync_service.dart';
 import '../../services/api_client.dart';
 import '../../services/database_helper.dart';
 import '../../services/notification_service.dart';
+import '../../config/reminders.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -32,6 +33,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool _onboardingShown = false;
   int _lastTabSignal = 0;
   Timer? _focusRefreshTimer;
+  final ValueNotifier<int> _focusTick = ValueNotifier<int>(0);
 
   @override
   void initState() {
@@ -47,14 +49,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     // Refresh current-focus card every 30s so it tracks time-slot transitions
     // without depending on FocusTimerProvider's ticking (only runs when active).
+    // Scoped refresh: only the current-focus card rebuilds, not the entire page.
     _focusRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
+      _focusTick.value++;
     });
   }
 
   @override
   void dispose() {
     _focusRefreshTimer?.cancel();
+    _focusTick.dispose();
     HomePage.tabSelected.removeListener(_onTabSelected);
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -64,7 +68,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!mounted) return;
     if (HomePage.tabSelected.value == _lastTabSignal) return;
     _lastTabSignal = HomePage.tabSelected.value;
-    _loadData();
+    // Provider handles cross-page state. Server sync runs in background only.
+    SyncService().syncAll();
   }
 
   @override
@@ -73,7 +78,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _sendCurrentTaskNotification();
       context.read<FocusTimerProvider>().persistSession();
     } else if (state == AppLifecycleState.resumed) {
-      _loadData();
+      // Only restore timer session on resume — no need to reload all data.
+      context.read<FocusTimerProvider>().restoreSession();
+      SyncService().syncAll();
     }
   }
 
@@ -146,6 +153,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           }
           // Reload to pick up server-merged plans
           if (mounted) await context.read<EliteProvider>().loadAll();
+        }
+      } catch (_) {}
+
+      // Fetch server reminders (non-blocking, fallback to built-in defaults)
+      try {
+        final remResp = await api.get('/config/reminders');
+        if (remResp.ok && remResp.data is List) {
+          RemindersStore.applyServer(
+            (remResp.data as List).cast<Map<String, dynamic>>(),
+          );
         }
       } catch (_) {}
     }
@@ -592,10 +609,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   builder: (_, study, __) {
                     return Consumer<FocusTimerProvider>(
                       builder: (_, timer, __) {
-                        final today = _todayDash();
-                        final studyMins = study.records.where((r) => r.recordDate == today).fold<int>(0, (s, r) => s + (r.studyMinutes ?? 0));
-                        final timerMins = timer.isRunning ? timer.elapsedSeconds ~/ 60 : 0;
-                        final totalMins = studyMins + timerMins;
+                        final totalMins = study.todayMinutes + (timer.isRunning ? timer.elapsedSeconds ~/ 60 : 0);
                         return _MiniStat(label: '记录时长', value: '$totalMins分钟', color: const Color(0xFFE6A23C));
                       },
                     );
@@ -615,21 +629,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 14),
 
             // ---- Current Focus (dark gradient card) ----
-            Consumer<EliteProvider>(
-              builder: (ctx, elite, __) {
-                final timer = ctx.watch<FocusTimerProvider>();
-                final now = DateTime.now();
-                final dateStr =
-                    '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-                final todayPlanList =
-                    elite.plans.where((p) => p.planDate == dateStr).toList();
-                return _CurrentFocusCard(
-                  plans: todayPlanList,
-                  timer: timer,
-                  onTap: (period, content, existingNote) =>
-                      _showFocusSheet(context, dateStr, period, content, existingNote),
-                );
-              },
+            // Current-focus card scoped to _focusTick (30s) so only this
+            // card rebuilds when the current time-slot changes.
+            ListenableBuilder(
+              listenable: _focusTick,
+              builder: (_, __) => Consumer<EliteProvider>(
+                builder: (ctx, elite, _) {
+                  final timer = ctx.watch<FocusTimerProvider>();
+                  final now = DateTime.now();
+                  final dateStr =
+                      '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+                  final todayPlanList =
+                      elite.plans.where((p) => p.planDate == dateStr).toList();
+                  return _CurrentFocusCard(
+                    plans: todayPlanList,
+                    timer: timer,
+                    onTap: (period, content, existingNote) =>
+                        _showFocusSheet(context, dateStr, period, content, existingNote),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 14),
 
@@ -985,7 +1004,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             // instead of 'ctx' (modal scope, disposed after pop).
             final timer = context.read<FocusTimerProvider>();
             if (timer.isRunning && timer.elapsedSeconds > 0) {
-              await timer.stopTimer();
+              final mins = await timer.stopTimer();
+              if (mins > 0 && context.mounted) {
+                context.read<StudyProvider>().addTodayMinutes(mins);
+              }
               if (context.mounted) {
                 await context.read<StudyProvider>().loadAll();
               }
@@ -1055,30 +1077,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         children: [
                           const Text('🍅 专注计时', style: TextStyle(fontSize: 12, color: Colors.white70)),
                           const SizedBox(height: 8),
-                          // Timer display
-                          Text(
-                            timerRunning ? timer.formattedTime : timer.formattedTarget,
-                            style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 2),
-                          ),
-                          if (timerRunning) ...[
-                            const SizedBox(height: 6),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: LinearProgressIndicator(
-                                value: timer.progress,
-                                minHeight: 8,
-                                backgroundColor: Colors.white24,
-                                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              timer.isCompleted
-                                  ? '🎉 目标达成！'
-                                  : '已用 ${timer.formattedElapsed} / 总计 ${timer.formattedTarget}',
-                              style: const TextStyle(fontSize: 12, color: Colors.white70),
-                            ),
-                          ],
+                          // Timer display — scoped to timer.tick so only this rebuilds each second.
+                          ListenableBuilder(
+                            listenable: timer.tick,
+                            builder: (_, __) => Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  timerRunning ? timer.formattedTime : timer.formattedTarget,
+                                  style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 2),
+                                ),
+                                if (timerRunning) ...[
+                                  const SizedBox(height: 6),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: LinearProgressIndicator(
+                                      value: timer.progress,
+                                      minHeight: 8,
+                                      backgroundColor: Colors.white24,
+                                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    timer.isCompleted
+                                        ? '🎉 目标达成！'
+                                        : '已用 ${timer.formattedElapsed} / 总计 ${timer.formattedTarget}',
+                                    style: const TextStyle(fontSize: 12, color: Colors.white70),
+                                  ),
+                                ], // closes if (timerRunning) spread list
+                              ], // closes ListenableBuilder Column children
+                            ), // closes inner Column
+                          ), // closes ListenableBuilder
                           const SizedBox(height: 16),
                           if (!timerRunning) ...[
                             // Preset duration buttons
@@ -1178,6 +1208,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 child: ElevatedButton.icon(
                                   onPressed: () async {
                                     final mins = await timer.stopTimer();
+                                    if (mins > 0) {
+                                      context.read<StudyProvider>().addTodayMinutes(mins);
+                                    }
                                     if (ctx.mounted) {
                                       await context.read<StudyProvider>().loadAll();
                                       timer.notifyStop();
@@ -1218,6 +1251,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                     color: const Color(0xFFE74C3C),
                                     onTap: () async {
                                       final mins = await timer.stopTimer();
+                                      if (mins > 0) {
+                                        context.read<StudyProvider>().addTodayMinutes(mins);
+                                      }
                                       if (ctx.mounted) {
                                         await context.read<StudyProvider>().loadAll();
                                         timer.notifyStop();
@@ -1238,7 +1274,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   padding: const EdgeInsets.only(top: 8),
                                   child: GestureDetector(
                                     onTap: () async {
-                                      await timer.stopTimer();
+                                      final mins = await timer.stopTimer();
+                                      if (mins > 0) {
+                                        context.read<StudyProvider>().addTodayMinutes(mins);
+                                      }
                                       if (ctx.mounted) {
                                         await context.read<StudyProvider>().loadAll();
                                       }
@@ -1709,23 +1748,33 @@ class _CurrentFocusCard extends StatelessWidget {
                         (currentPlan != null ? '当前时段 $periodLabel' : '当前时段'),
                     style: const TextStyle(fontSize: 12, color: Colors.white70)),
                   const SizedBox(height: 4),
-                  if (timerRunning) ...[
-                    Text('剩余 ${timer.formattedTime}',
-                        style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 2)),
-                    const SizedBox(height: 2),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: LinearProgressIndicator(
-                        value: timer.progress,
-                        minHeight: 3,
-                        backgroundColor: Colors.white24,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                  if (timerRunning)
+                    // Scoped to timer.tick — only timer display rebuilds, not the entire card.
+                    ListenableBuilder(
+                      listenable: timer.tick,
+                      builder: (_, __) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('剩余 ${timer.formattedTime}',
+                              style: const TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700, letterSpacing: 2)),
+                          const SizedBox(height: 2),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: timer.progress,
+                              minHeight: 3,
+                              backgroundColor: Colors.white24,
+                              valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text('已用${timer.formattedElapsed} / 总计${timer.formattedTarget}  $content',
+                              style: const TextStyle(fontSize: 11, color: Colors.white60)),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text('已用${timer.formattedElapsed} / 总计${timer.formattedTarget}  $content',
-                        style: const TextStyle(fontSize: 11, color: Colors.white60)),
-                  ] else
+                    )
+                  else
                     Text(content,
                         style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w600)),
                   if (!timerRunning && hasNote) ...[

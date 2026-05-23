@@ -38,6 +38,17 @@ class LifeLeisureRecord {
         if (recordDate != null) 'date': recordDate,
       };
 
+  LifeLeisureRecord copyWith({int? id}) => LifeLeisureRecord(
+        id: id ?? this.id,
+        userId: userId,
+        leisureType: leisureType,
+        leisureMinutes: leisureMinutes,
+        happyScore: happyScore,
+        arrangeState: arrangeState,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   String get typeLabel {
     const map = {
       'relax': '放松', 'meditate': '冥想', 'quotes': '治愈短句',

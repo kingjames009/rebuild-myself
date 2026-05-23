@@ -73,6 +73,22 @@ class LifeEssentialConfig {
     'any': '任意',
   };
 
+  LifeEssentialConfig copyWith({int? id, int? enabled}) =>
+      LifeEssentialConfig(
+        id: id ?? this.id,
+        userId: userId,
+        category: category,
+        name: name,
+        defaultDuration: defaultDuration,
+        variants: variants,
+        energyLevel: energyLevel,
+        minWeeklyFreq: minWeeklyFreq,
+        maxWeeklyFreq: maxWeeklyFreq,
+        preferredPeriod: preferredPeriod,
+        enabled: enabled ?? this.enabled,
+        createTime: createTime,
+      );
+
   String get categoryLabel =>
       category < categoryLabels.length ? categoryLabels[category] : '其他';
   String get periodLabel => periodLabels[preferredPeriod] ?? preferredPeriod;

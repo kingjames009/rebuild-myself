@@ -41,6 +41,18 @@ class SidelinePlan {
         if (recordDate != null) 'date': recordDate,
       };
 
+  SidelinePlan copyWith({int? id}) => SidelinePlan(
+        id: id ?? this.id,
+        userId: userId,
+        sideType: sideType,
+        dailyAction: dailyAction,
+        progress: progress,
+        blockReason: blockReason,
+        energyCost: energyCost,
+        recordDate: recordDate,
+        createTime: createTime,
+      );
+
   String get typeLabel {
     const map = {'english': '英语方向', 'ai': 'AI方向', 'dev': '开发综合'};
     return map[sideType] ?? sideType ?? '未知';

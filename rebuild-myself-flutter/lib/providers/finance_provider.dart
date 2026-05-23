@@ -52,19 +52,24 @@ class FinanceProvider extends ChangeNotifier {
 
   Future<void> add(FinanceMentalLog log) async {
     final db = await DatabaseHelper().db;
-    await db.insert('finance_mental_log', log.toJson());
-    await loadAll();
+    final newId = await db.insert('finance_mental_log', log.toJson());
+    _logs.insert(0, log.copyWith(id: newId));
+    notifyListeners();
   }
 
   Future<void> update(FinanceMentalLog log) async {
     final db = await DatabaseHelper().db;
     await db.update('finance_mental_log', log.toJson(), where: 'id = ?', whereArgs: [log.id]);
-    await loadAll();
+    for (int i = 0; i < _logs.length; i++) {
+      if (_logs[i].id == log.id) { _logs[i] = log; break; }
+    }
+    notifyListeners();
   }
 
   Future<void> delete(int id) async {
     final db = await DatabaseHelper().db;
     await db.delete('finance_mental_log', where: 'id = ?', whereArgs: [id]);
-    await loadAll();
+    _logs.removeWhere((r) => r.id == id);
+    notifyListeners();
   }
 }
