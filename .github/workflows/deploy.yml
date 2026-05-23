@@ -31,18 +31,18 @@ jobs:
           echo "${{ secrets.ALIYUN_SSH_KEY }}" | base64 -d > deploy_key
           chmod 644 deploy_key
 
-      - name: Upload JAR + migrations to server
+      - name: Upload JAR to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.ALIYUN_HOST }}
           username: ${{ secrets.ALIYUN_USER }}
           key_path: /github/workspace/deploy_key
           port: 22
-          source: "rebuild-myself-server/target/rebuild-myself-server-1.0.0.jar,rebuild-myself-server/deploy/migration_001_reminders.sql"
+          source: "rebuild-myself-server/target/rebuild-myself-server-1.0.0.jar"
           target: "/data/rebuild-myself"
           strip_components: 3
 
-      - name: Run DB migration + Restart service
+      - name: Restart service
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ALIYUN_HOST }}
@@ -50,13 +50,6 @@ jobs:
           key_path: /github/workspace/deploy_key
           port: 22
           script: |
-            echo "=== Running DB migrations ==="
-            source /data/rebuild-myself/env.sh
-            MIGRATION_FILE="/data/rebuild-myself/migration_001_reminders.sql"
-            if [ -f "$MIGRATION_FILE" ]; then
-              mysql -u "$DB_USERNAME" -p"$DB_PASSWORD" rebuild_myself < "$MIGRATION_FILE" && echo "Migration OK" || echo "Migration skipped (may already exist)"
-            fi
-
             echo "=== Restarting service ==="
             systemctl daemon-reload
             systemctl restart rebuild-myself
