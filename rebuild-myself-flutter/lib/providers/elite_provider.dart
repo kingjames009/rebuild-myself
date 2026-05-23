@@ -550,8 +550,12 @@ class EliteProvider extends ChangeNotifier {
 
             // Ensure every goal gets at least one plan item
             _tagPlanWithGoalTitles(plans, goals ?? []);
-            // Safety net: strip any non-meditation content from work-hour slots
-            _sanitizeWorkHourPlans(plans);
+            // Move voice/speaking content to evening slots
+            _moveVoiceContentToEvening(plans);
+            // Only sanitize work-hour plans on workdays
+            if (HolidayConfig.isWorkday(DateTime.now())) {
+              _sanitizeWorkHourPlans(plans);
+            }
 
             // Insert all plans — already saved on server, mark synced
             for (final p in plans) {
@@ -597,8 +601,11 @@ class EliteProvider extends ChangeNotifier {
 
     // Post-process: tag plans with matching goal titles
     _tagPlanWithGoalTitles(generated, goals ?? []);
+    // Move voice/speaking content to evening slots
+    _moveVoiceContentToEvening(generated);
     // Safety net: strip any non-meditation content from work-hour slots
-    _sanitizeWorkHourPlans(generated);
+    // Only on workdays — weekends keep learning/task content during the day.
+    if (!isWeekend) _sanitizeWorkHourPlans(generated);
 
     // Batch insert all plans in a single write
     await db.insertBatch('daily_model_plan',
@@ -755,6 +762,43 @@ class EliteProvider extends ChangeNotifier {
         difficulty: 1,
       );
       workFocusIdx++;
+    }
+  }
+
+  /// Move plans that require speaking aloud (English/speech practice)
+  /// to evening slots so the user doesn't disturb others during the day.
+  void _moveVoiceContentToEvening(List<DailyModelPlan> plans) {
+    const voiceKeywords = ['英语', '演讲', '口语', '发音', '朗读', '背诵', 'speech', 'talk', 'speak'];
+    bool isVoice(String? s) =>
+        s != null && voiceKeywords.any((k) => s.contains(k));
+
+    // Collect indices of voice-content plans (not already in evening)
+    final voiceIndices = <int>[];
+    final eveningIndices = <int>[];
+    for (int i = 0; i < plans.length; i++) {
+      final period = plans[i].timePeriod ?? '';
+      final content = plans[i].planContent ?? '';
+      final startHour = int.tryParse(period.split(':').first) ?? -1;
+      if (startHour >= 18) {
+        eveningIndices.add(i);
+      } else if (isVoice(content)) {
+        voiceIndices.add(i);
+      }
+    }
+    if (voiceIndices.isEmpty || eveningIndices.isEmpty) return;
+
+    // Swap voice plans into evening slots (from the last evening slot backward)
+    for (int vi = 0; vi < voiceIndices.length; vi++) {
+      final ei = eveningIndices.length - 1 - vi;
+      if (ei < 0) break;
+      final vIdx = voiceIndices[vi];
+      final eIdx = eveningIndices[ei];
+      // Only swap if the evening plan isn't voice content itself
+      if (!isVoice(plans[eIdx].planContent)) {
+        final tmp = plans[vIdx];
+        plans[vIdx] = plans[eIdx];
+        plans[eIdx] = tmp;
+      }
     }
   }
 
