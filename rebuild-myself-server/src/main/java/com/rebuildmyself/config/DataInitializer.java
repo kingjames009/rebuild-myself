@@ -4,7 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -13,6 +15,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.Arrays;
+import java.util.Comparator;
 
 @Component
 public class DataInitializer implements ApplicationRunner {
@@ -27,30 +31,35 @@ public class DataInitializer implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         try {
-            initReminderText();
+            runMigrations();
         } catch (Exception e) {
             log.error("DataInitializer failed: {}", e.getMessage(), e);
         }
     }
 
-    private void initReminderText() throws Exception {
-        // Check if table already exists by trying a simple query
-        try (Connection conn = dataSource.getConnection();
-             Statement stmt = conn.createStatement()) {
-            stmt.executeQuery("SELECT 1 FROM reminder_text LIMIT 1");
-            log.info("reminder_text already exists, skip migration");
+    private void runMigrations() throws Exception {
+        ResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
+        Resource[] resources = resolver.getResources("classpath:db/migration_*.sql");
+        Arrays.sort(resources, Comparator.comparing(Resource::getFilename));
+
+        if (resources.length == 0) {
+            log.info("No migration SQL files found");
             return;
-        } catch (Exception e) {
-            log.info("reminder_text not found, creating... ({}: {})",
-                e.getClass().getSimpleName(), e.getMessage());
         }
 
-        // Read and execute migration SQL
+        log.info("Found {} migration file(s)", resources.length);
+        for (Resource resource : resources) {
+            executeMigration(resource);
+        }
+    }
+
+    private void executeMigration(Resource resource) throws Exception {
+        String filename = resource.getFilename();
+        log.info("Executing migration: {}", filename);
+
         StringBuilder sb = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                    new ClassPathResource("db/migration_001_reminders.sql").getInputStream(),
-                    StandardCharsets.UTF_8))) {
+                new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String trimmed = line.trim();
@@ -73,6 +82,6 @@ public class DataInitializer implements ApplicationRunner {
                 }
             }
         }
-        log.info("reminder_text migration completed");
+        log.info("Migration {} completed", filename);
     }
 }

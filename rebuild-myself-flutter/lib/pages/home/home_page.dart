@@ -18,6 +18,9 @@ import '../../services/api_client.dart';
 import '../../services/database_helper.dart';
 import '../../services/notification_service.dart';
 import '../../config/reminders.dart';
+import '../../config/holiday_config.dart';
+import '../../models/time_block.dart';
+import '../../models/custom_priority.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -547,6 +550,458 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _clearTodayPlan(EliteProvider elite, String dateStr) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('确认清除'),
+        content: const Text('将删除今日所有规划，确定？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认')),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await elite.clearPlansForDate(dateStr);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已清除今日规划'), duration: Duration(seconds: 2)),
+        );
+      }
+    }
+  }
+
+  // ---- Plan Settings Bottom Sheet ----
+  void _showPlanSettings() {
+    final elite = context.read<EliteProvider>();
+    final ws = elite.workSchedule;
+    String workStart = ws.workStart;
+    String workEnd = ws.workEnd;
+    String lunchStart = ws.lunchStart;
+    String lunchEnd = ws.lunchEnd;
+    String studyStart = ws.studyStart;
+    String studyEnd = ws.studyEnd;
+    String configDayType = 'workday';
+    bool showTimeBlocks = false;
+
+    final customCtrl = TextEditingController();
+    String customSegment = '下班后';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final p = ctx.watch<EliteProvider>();
+            final isWorkday = HolidayConfig.isWorkday(DateTime.now());
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (_, scrollController) {
+                return ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    // Title
+                    Row(
+                      children: [
+                        const Text('计划设置', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => Navigator.of(ctx).pop(),
+                          child: const Icon(Icons.close, color: AppTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text('调整这些参数影响「生成今日计划」的输出',
+                        style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                    const SizedBox(height: 20),
+
+                    // ---- Section 1: Work Schedule ----
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Text(isWorkday ? '⏰ 工作时间' : '⏰ 学习时间',
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 8),
+                            Text(isWorkday ? '工作日' : '休息日',
+                                style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                          ]),
+                          const SizedBox(height: 4),
+                          Text(isWorkday ? '设定上下班时间，系统据此划分全天5个时段' : '设定学习起止时间',
+                              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          const SizedBox(height: 14),
+                          if (isWorkday) ...[
+                            Row(children: [
+                              Expanded(child: _buildTimeCell('上班', workStart, (v) => setSheetState(() => workStart = v))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildTimeCell('下班', workEnd, (v) => setSheetState(() => workEnd = v))),
+                            ]),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(child: _buildTimeCell('午休开始', lunchStart, (v) => setSheetState(() => lunchStart = v))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildTimeCell('午休结束', lunchEnd, (v) => setSheetState(() => lunchEnd = v))),
+                            ]),
+                          ] else ...[
+                            Row(children: [
+                              Expanded(child: _buildTimeCell('开始学习', studyStart, (v) => setSheetState(() => studyStart = v))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildTimeCell('结束学习', studyEnd, (v) => setSheetState(() => studyEnd = v))),
+                            ]),
+                            const SizedBox(height: 10),
+                            Row(children: [
+                              Expanded(child: _buildTimeCell('午休开始', lunchStart, (v) => setSheetState(() => lunchStart = v))),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildTimeCell('午休结束', lunchEnd, (v) => setSheetState(() => lunchEnd = v))),
+                            ]),
+                          ],
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 40,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final schedule = WorkSchedule(
+                                  workStart: workStart, workEnd: workEnd,
+                                  lunchStart: lunchStart, lunchEnd: lunchEnd,
+                                  studyStart: studyStart, studyEnd: studyEnd,
+                                );
+                                await context.read<EliteProvider>().saveWorkSchedule(schedule);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(
+                                    SnackBar(content: Text(isWorkday ? '工作时间已保存' : '学习时间已保存'), duration: const Duration(seconds: 1)),
+                                  );
+                                }
+                              },
+                              child: Text(isWorkday ? '保存工作时间' : '保存学习时间', style: const TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---- Section 2: Custom Priorities ----
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(children: [
+                            Text('⭐ 自定义优先事项', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            SizedBox(width: 8),
+                            Text('最高优先级', style: TextStyle(fontSize: 11, color: AppTheme.warning)),
+                          ]),
+                          const SizedBox(height: 4),
+                          const Text('自定义事项将优先于习惯库排入计划',
+                              style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          const SizedBox(height: 12),
+                          Row(children: [
+                            Expanded(
+                              child: SizedBox(
+                                height: 40,
+                                child: TextField(
+                                  controller: customCtrl,
+                                  style: const TextStyle(fontSize: 13),
+                                  decoration: const InputDecoration(
+                                    hintText: '如「30分钟英语口语」',
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 80,
+                              child: _buildSegmentDropdown(customSegment, (v) => setSheetState(() => customSegment = v)),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              height: 40,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  if (customCtrl.text.trim().isEmpty) return;
+                                  await context.read<EliteProvider>().addCustomItem(customCtrl.text.trim(), customSegment);
+                                  customCtrl.clear();
+                                  setSheetState(() {});
+                                },
+                                style: ElevatedButton.styleFrom(minimumSize: const Size(44, 40), padding: const EdgeInsets.symmetric(horizontal: 12)),
+                                child: const Text('添加', style: TextStyle(fontSize: 12)),
+                              ),
+                            ),
+                          ]),
+                          if (p.customItems.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            ...p.customItems.map((item) => Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(color: AppTheme.primary.withValues(alpha: 0.06), borderRadius: BorderRadius.circular(4)),
+                                  child: Text(item.preferredSegment, style: const TextStyle(fontSize: 10, color: AppTheme.primary)),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Text(item.content, style: const TextStyle(fontSize: 13))),
+                                GestureDetector(
+                                  onTap: () async {
+                                    final confirm = await showDialog<bool>(context: ctx, builder: (dCtx) => AlertDialog(
+                                      title: const Text('确认删除'),
+                                      content: const Text('删除该自定义事项？'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(dCtx, false), child: const Text('取消')),
+                                        TextButton(onPressed: () => Navigator.pop(dCtx, true), child: const Text('删除', style: TextStyle(color: AppTheme.danger))),
+                                      ],
+                                    ));
+                                    if (confirm == true) {
+                                      context.read<EliteProvider>().deleteCustomItem(item.id!);
+                                      setSheetState(() {});
+                                    }
+                                  },
+                                  child: const Icon(Icons.close, size: 16, color: AppTheme.textMuted),
+                                ),
+                              ]),
+                            )),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---- Section 3: Advanced Time Blocks ----
+                    GestureDetector(
+                      onTap: () => setSheetState(() => showTimeBlocks = !showTimeBlocks),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppTheme.border),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(children: [
+                          const Text('🔧 高级：自定义时段', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          Icon(showTimeBlocks ? Icons.expand_less : Icons.expand_more, color: AppTheme.textSecondary),
+                        ]),
+                      ),
+                    ),
+                    if (showTimeBlocks) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: AppTheme.border),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Text('手动编辑周末/工作日的时间块', style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          const SizedBox(height: 10),
+                          Row(children: [
+                            const Text('日类型：', style: TextStyle(fontSize: 13)),
+                            const SizedBox(width: 8),
+                            _buildChip('工作日', configDayType == 'workday', () => setSheetState(() => configDayType = 'workday')),
+                            const SizedBox(width: 6),
+                            _buildChip('周末', configDayType == 'weekend', () => setSheetState(() => configDayType = 'weekend')),
+                            const Spacer(),
+                            TextButton.icon(
+                              onPressed: () => context.read<EliteProvider>().resetTimeBlocks(configDayType).then((_) => setSheetState(() {})),
+                              icon: const Icon(Icons.restore, size: 14),
+                              label: const Text('默认', style: TextStyle(fontSize: 12)),
+                              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
+                          ...List.generate(_configBlocks(p, configDayType).length, (i) {
+                            final b = _configBlocks(p, configDayType)[i];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(children: [
+                                SizedBox(width: 52, child: _timeField(b.start, (v) => setSheetState(() => b.start = v))),
+                                const Text(' - ', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                                SizedBox(width: 52, child: _timeField(b.end, (v) => setSheetState(() => b.end = v))),
+                                const SizedBox(width: 6),
+                                SizedBox(width: 56, child: _buildTypeDropdown(b.type, (v) => setSheetState(() => b.type = v))),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 34,
+                                    child: TextField(
+                                      controller: TextEditingController(text: b.label),
+                                      onChanged: (v) => b.label = v,
+                                      style: const TextStyle(fontSize: 12),
+                                      decoration: const InputDecoration(hintText: '标签', contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8), border: OutlineInputBorder(), isDense: true),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                GestureDetector(
+                                  onTap: () {
+                                    final blocks = _configBlocks(p, configDayType);
+                                    if (blocks.length > 1) { blocks.removeAt(i); setSheetState(() {}); }
+                                  },
+                                  child: const Icon(Icons.close, size: 16, color: AppTheme.textMuted),
+                                ),
+                              ]),
+                            );
+                          }),
+                          const SizedBox(height: 4),
+                          SizedBox(
+                            width: double.infinity, height: 32,
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                final blocks = _configBlocks(p, configDayType);
+                                final last = blocks.isNotEmpty ? blocks.last.end : '06:00';
+                                final h = int.tryParse(last.split(':')[0]) ?? 6;
+                                final m = int.tryParse(last.split(':')[1]) ?? 0;
+                                final total = h * 60 + m + 30;
+                                final newH = (total ~/ 60) % 24;
+                                final newM = total % 60;
+                                blocks.add(TimeBlockConfig(start: last, end: '${newH.toString().padLeft(2, '0')}:${newM.toString().padLeft(2, '0')}', type: 1));
+                                setSheetState(() {});
+                              },
+                              icon: const Icon(Icons.add, size: 16),
+                              label: const Text('添加时间块', style: TextStyle(fontSize: 12)),
+                              style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 10)),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          SizedBox(
+                            width: double.infinity, height: 38,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final blocks = _configBlocks(p, configDayType).map((b) => TimeBlockConfig(start: b.start, end: b.end, label: b.label, type: b.type)).toList();
+                                await context.read<EliteProvider>().saveTimeBlocks(configDayType, blocks);
+                                if (ctx.mounted) {
+                                  ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('时间设置已保存'), duration: Duration(seconds: 1)));
+                                }
+                              },
+                              child: const Text('保存时间设置', style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ],
+                    const SizedBox(height: 80),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<TimeBlockConfig> _configBlocks(EliteProvider p, String dayType) =>
+      dayType == 'workday' ? p.workdayBlocks : p.weekendBlocks;
+
+  // ---- Settings helper widgets ----
+  Widget _buildTimeCell(String label, String value, ValueChanged<String> onChanged) {
+    return GestureDetector(
+      onTap: () async {
+        final parts = value.split(':');
+        final t = await showTimePicker(
+          context: context,
+          initialTime: TimeOfDay(hour: int.tryParse(parts[0]) ?? 9, minute: int.tryParse(parts[1]) ?? 0),
+        );
+        if (t != null) {
+          onChanged('${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}');
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(border: Border.all(color: AppTheme.border), borderRadius: BorderRadius.circular(8)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('$label  ', style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(width: 4),
+          const Icon(Icons.access_time, size: 14, color: AppTheme.textSecondary),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildSegmentDropdown(String value, ValueChanged<String> onChanged) {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      decoration: BoxDecoration(border: Border.all(color: AppTheme.border), borderRadius: BorderRadius.circular(6)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          isDense: true,
+          style: const TextStyle(fontSize: 11, color: AppTheme.textPrimary),
+          items: CustomPriorityItem.segments.map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 11)))).toList(),
+          onChanged: (v) { if (v != null) onChanged(v); },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeDropdown(int value, ValueChanged<int> onChanged) {
+    return Container(
+      height: 34,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(border: Border.all(color: AppTheme.border), borderRadius: BorderRadius.circular(6)),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: value,
+          isDense: true,
+          style: const TextStyle(fontSize: 11, color: AppTheme.textPrimary),
+          items: TimeBlockConfig.typeLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 11)))).toList(),
+          onChanged: (v) { if (v != null) onChanged(v); },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChip(String label, bool active, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: active ? AppTheme.primary : AppTheme.bg,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Text(label, style: TextStyle(fontSize: 12, color: active ? Colors.white : AppTheme.textSecondary, fontWeight: active ? FontWeight.w600 : FontWeight.w400)),
+      ),
+    );
+  }
+
+  Widget _timeField(String value, ValueChanged<String> onChanged) {
+    return Container(
+      height: 34,
+      decoration: BoxDecoration(border: Border.all(color: AppTheme.border), borderRadius: BorderRadius.circular(6)),
+      child: TextField(
+        controller: TextEditingController(text: value),
+        onChanged: (v) { if (RegExp(r'^\d{1,2}:\d{2}$').hasMatch(v)) onChanged(v); },
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 12),
+        decoration: const InputDecoration(contentPadding: EdgeInsets.zero, border: InputBorder.none, isDense: true),
+      ),
+    );
+  }
+
   String _weekday() {
     const w = ['日', '一', '二', '三', '四', '五', '六'];
     return '星期${w[DateTime.now().weekday % 7]}';
@@ -704,26 +1159,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
             // ---- Today's Plan (from EliteProvider) ----
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('今日规划', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                Consumer<EliteProvider>(
-                  builder: (_, elite, __) {
-                    final dateStr = _todayDash();
-                    return SizedBox(
-                      height: 34,
-                      child: ElevatedButton.icon(
-                        onPressed: elite.generating
-                            ? null
-                            : () => _generateTodayPlan(elite, dateStr),
-                        icon: elite.generating
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('✨', style: TextStyle(fontSize: 14)),
-                        label: Text(elite.generating ? '生成中' : '生成', style: const TextStyle(fontSize: 13)),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
-                      ),
-                    );
-                  },
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => _showPlanSettings(),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.settings, size: 18, color: AppTheme.textSecondary),
+                  ),
                 ),
               ],
             ),
@@ -738,9 +1186,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: Center(
-                        child: Text('暂无今日规划，点击上方「✨ 生成」一键创建',
-                            style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('暂无今日规划',
+                              style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 42,
+                            child: ElevatedButton.icon(
+                              onPressed: elite.generating
+                                  ? null
+                                  : () => _generateTodayPlan(elite, dateStr),
+                              icon: elite.generating
+                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                                  : const Text('✨', style: TextStyle(fontSize: 16)),
+                              label: Text(elite.generating ? '生成中...' : '生成今日计划', style: const TextStyle(fontSize: 14)),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -762,7 +1227,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 return Card(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
-                    child: ReorderableListView.builder(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ReorderableListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: sortedPlans.length,
@@ -965,8 +1433,38 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         );
                       },
                     ),
-                  ),
-                );
+                    const Divider(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        onPressed: elite.generating
+                            ? null
+                            : () => _generateTodayPlan(elite, dateStr),
+                        icon: elite.generating
+                            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('✨', style: TextStyle(fontSize: 16)),
+                        label: Text(elite.generating ? '生成中...' : '重新生成今日计划', style: const TextStyle(fontSize: 14)),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _clearTodayPlan(elite, dateStr),
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        label: const Text('清除今日计划', style: TextStyle(fontSize: 13)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.textMuted,
+                          side: const BorderSide(color: AppTheme.border),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
               },
             ),
             const SizedBox(height: 16),

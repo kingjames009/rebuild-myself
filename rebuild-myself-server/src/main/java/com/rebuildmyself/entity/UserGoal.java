@@ -23,6 +23,7 @@ public class UserGoal {
     private LocalDate targetTime;
     private Integer progress;
     private Integer status;
+    private String preferredSegment;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 }

@@ -171,7 +171,28 @@
       "Bash(base64 -w0)",
       "Bash(mvn -B compile)",
       "Bash(gh run *)",
-      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); runs=data.get\\('workflow_runs',[]\\); [print\\(f\\\\\"{r['name']} — {r['status']} / {r['conclusion']} — {r['created_at']}\\\\\"\\) for r in runs]\")"
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); runs=data.get\\('workflow_runs',[]\\); [print\\(f\\\\\"{r['name']} — {r['status']} / {r['conclusion']} — {r['created_at']}\\\\\"\\) for r in runs]\")",
+      "Bash(python -c \"import sys,json; data=json.load\\(sys.stdin\\); runs=data.get\\('workflow_runs',[]\\); [print\\(f\\\\\"{r['name']} — {r['status']} / {r['conclusion']}\\\\\"\\) for r in runs]\")",
+      "Bash(mvn -B -DskipTests clean package -Pprod)",
+      "Bash(scp *)",
+      "Bash(mvn -B -DskipTests clean package)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('ok, count:', len\\(d['data']\\) if isinstance\\(d['data'], list\\) else 'not list, type='+str\\(type\\(d['data']\\)\\)\\)\")",
+      "Bash(adb devices *)",
+      "Bash(mvn -B -DskipTests compile)",
+      "Bash(mvn -B -DskipTests spring-boot:run -Dspring-boot.run.arguments=\"--spring.profiles.active=dev\")",
+      "Bash(mysqladmin *)",
+      "Bash(mvn spring-boot:run -q)",
+      "Bash(openssl dgst *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('code:', d.get\\('code'\\)\\); print\\('originalData length:', len\\(d.get\\('data',{}\\).get\\('originalData',''\\) if isinstance\\(d.get\\('data'\\),dict\\) else ''\\)\\); print\\('reportContent:', d.get\\('data',{}\\).get\\('reportContent',''\\)[:500] if isinstance\\(d.get\\('data'\\),dict\\) else 'NO DATA'\\)\")",
+      "Bash(aliyun version *)",
+      "Bash(/usr/lib/jvm/*/bin/java -version)",
+      "Bash(git *)",
+      "Bash(set PUB_HOSTED_URL=https://pub.flutter-io.cn)",
+      "Bash(set FLUTTER_STORAGE_BASE_URL=https://storage.flutter-io.cn)",
+      "Bash(sed -i '67,276d' lib/providers/elite_provider.dart)",
+      "Bash(sed -n '64,70p' lib/providers/elite_provider.dart)",
+      "Bash(JAVA_HOME=\"D:/Program Files/Java/jdk-21\" mvn compile -q)",
+      "Bash(xxd)"
     ]
   }
 }

@@ -196,6 +196,15 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
                 if (g.getTargetTime() != null) {
                     sb.append("[截止").append(g.getTargetTime()).append("]");
                 }
+                if (g.getPreferredSegment() != null && !g.getPreferredSegment().isEmpty()) {
+                    String segLabel = switch (g.getPreferredSegment()) {
+                        case "上班前" -> "上班前(06:00-09:00)";
+                        case "午休" -> "午休(12:00-13:30)";
+                        case "下班后" -> "下班后(18:00-23:00)";
+                        default -> g.getPreferredSegment();
+                    };
+                    sb.append("【用户指定时段：").append(segLabel).append("】");
+                }
                 sb.append(" ").append(g.getGoalTitle());
                 if (g.getGoalContent() != null && !g.getGoalContent().isEmpty()) {
                     sb.append(" — ").append(g.getGoalContent());
@@ -208,9 +217,10 @@ public class DailyModelPlanServiceImpl extends ServiceImpl<DailyModelPlanMapper,
             sb.append("2. 每个目标至少安排1个专属时间段，重要目标安排2-3个时段。\n");
             sb.append("3. 执行步骤前面必须加上【目标标题】前缀，格式：【目标标题】今天的具体执行内容。\n");
             sb.append("   例如：【Flutter开发精通】完成用户登录页面的状态管理重构，替换为Riverpod方案\n");
-            sb.append("4. 学习类目标安排在认知高峰期(07:00-10:00或20:00-22:00)，健康类安排在晨间或下班后，财务类安排在下班后。\n");
-            sb.append("5. 临近截止日期的目标优先级最高，必须优先安排足够时间。\n");
-            sb.append("6. 每个目标今天都必须安排，周末也不例外。周末可以把工作相关目标安排在下午或晚上，不要跳过。\n\n");
+            sb.append("4. 如果目标标注了【用户指定时段】，必须严格遵守该时段安排，不能安排到其他时段。\n");
+            sb.append("5. 未指定时段的学习类目标安排在认知高峰期(07:00-10:00或20:00-22:00)，健康类安排在晨间或下班后，财务类安排在下班后。\n");
+            sb.append("6. 临近截止日期的目标优先级最高，必须优先安排足够时间。\n");
+            sb.append("7. 每个目标今天都必须安排，周末也不例外。周末可以把工作相关目标安排在下午或晚上，不要跳过。\n\n");
         }
 
         // Life essentials

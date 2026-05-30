@@ -9,12 +9,16 @@ class RemindersData {
   final List<String> bodyAnchor;
   final List<String> physicalInterrupt;
   final List<String> antiDoomscroll;
+  final List<String> mindWandering;
+  final List<String> selfTalk;
 
   const RemindersData({
     required this.focus,
     required this.bodyAnchor,
     required this.physicalInterrupt,
     required this.antiDoomscroll,
+    required this.mindWandering,
+    required this.selfTalk,
   });
 }
 
@@ -24,6 +28,8 @@ class RemindersStore {
     bodyAnchor: _bodyAnchorReminders,
     physicalInterrupt: _physicalInterruptReminders,
     antiDoomscroll: _antiDoomscrollNudges,
+    mindWandering: _mindWanderingReminders,
+    selfTalk: _selfTalkReminders,
   );
 
   static RemindersData? _server;
@@ -35,33 +41,29 @@ class RemindersStore {
     final anchor = <String>[];
     final interrupt = <String>[];
     final nudge = <String>[];
+    final mind = <String>[];
+    final talk = <String>[];
     for (final r in rows) {
       final cat = (r['category'] ?? '').toString();
       final content = (r['content'] ?? '').toString();
       if (content.isEmpty) continue;
       switch (cat) {
-        case 'focus':
-          focus.add(content);
-          break;
-        case 'body_anchor':
-          anchor.add(content);
-          break;
-        case 'physical_interrupt':
-          interrupt.add(content);
-          break;
-        case 'anti_doomscroll':
-          nudge.add(content);
-          break;
+        case 'focus': focus.add(content); break;
+        case 'body_anchor': anchor.add(content); break;
+        case 'physical_interrupt': interrupt.add(content); break;
+        case 'anti_doomscroll': nudge.add(content); break;
+        case 'mind_wandering': mind.add(content); break;
+        case 'self_talk': talk.add(content); break;
       }
     }
-    if (focus.isNotEmpty || anchor.isNotEmpty || interrupt.isNotEmpty || nudge.isNotEmpty) {
-      _server = RemindersData(
-        focus: focus.isNotEmpty ? focus : _fallback.focus,
-        bodyAnchor: anchor.isNotEmpty ? anchor : _fallback.bodyAnchor,
-        physicalInterrupt: interrupt.isNotEmpty ? interrupt : _fallback.physicalInterrupt,
-        antiDoomscroll: nudge.isNotEmpty ? nudge : _fallback.antiDoomscroll,
-      );
-    }
+    _server = RemindersData(
+      focus: focus.isNotEmpty ? focus : _fallback.focus,
+      bodyAnchor: anchor.isNotEmpty ? anchor : _fallback.bodyAnchor,
+      physicalInterrupt: interrupt.isNotEmpty ? interrupt : _fallback.physicalInterrupt,
+      antiDoomscroll: nudge.isNotEmpty ? nudge : _fallback.antiDoomscroll,
+      mindWandering: mind.isNotEmpty ? mind : _fallback.mindWandering,
+      selfTalk: talk.isNotEmpty ? talk : _fallback.selfTalk,
+    );
   }
 }
 
@@ -228,4 +230,41 @@ const _antiDoomscrollNudges = [
   '🤝 诱惑捆绑：把想做的事和该做的事绑定。"只有在做完20分钟副业后，才能刷10分钟"。既不完全剥夺，也不完全放纵——给冲动一个受限的出口。',
   '🔄 习惯回路切断：刷视频的回路是 信号(无聊)→行为(打开APP)→奖励(新奇刺激)。这次试试换个行为——无聊时做10个俯卧撑，奖励自己一句肯定的话。',
   '📉 渐进延迟：如果现在就想刷，设一个10分钟倒计时。10分钟后还想刷就再延10分钟。每一次延迟都是在重训大脑的等待能力，不要小看。',
+];
+
+// ── Anti-mind-wandering reminders (胡思乱想干预) ─────────────────────
+const _mindWanderingReminders = [
+  '💭 念头观察：想象自己坐在河边——每一个冒出来的念头都是河上漂过的落叶。看它来，看它走，不跳下去追任何一片。回到手头的事。',
+  '💭 思维停车场：拿一张便签，把脑子里在转的事全写下来——一条一行。写下来=交给纸保管，大脑就可以松手了。30秒清空。',
+  '💭 单任务锚定：接下来的时间只做一件事。如果手指想切窗口、脑子想跳话题——温柔地对它说"现在做这个"。专注是练习出来的，不是天生的。',
+  '💭 杂念命名法：每当一个念头冒出来，在心里给它贴个标签——"担心"、"计划"、"回忆"、"幻想"。贴完就放，不展开。命名即解脱。',
+  '💭 呼吸归零：闭上眼睛，从1数到10的呼吸。走神了？没关系，回到1重新开始。这不是考试——每一次"回来"都是专注力的一个俯卧撑。',
+  '💭 外部焦点：暂停内心的思绪流，转向外部——看窗外的云、听空调的声音、感受桌面的纹理。外部世界一直在那里，等你重新连接。',
+  '💭 此刻确认：问自己一个问题——"现在，我在做什么？"看着手头的任务，用一句话描述它。时空定位是最简单的现实检验。',
+  '💭 身体回归：感受你的脚底贴地、坐骨承重、手掌的温度。注意力从"头脑中的世界"降落到"身体此刻的感觉"。你在这里，不在那些念头里。',
+  '💭 5分钟放空：允许自己什么都不想——不是走神，是有意识地放空。像把一杯浑浊的水静置，让它慢慢澄清。5分钟后自然知道该做什么。',
+  '💭 念头的门卫：想象你的注意力是一座城堡，念头是来访者。你可以选择开门或不开门。不重要的念头说"请稍等，我在忙"——你有这个权力。',
+  '💭 优先级回归：把手机/电脑上正在做的事写在一张便签上放在屏幕旁。每次走神回来，看一眼便签——哦，我在做这个。视觉锚定比记忆可靠。',
+  '💭 大脑清仓：你有3分钟——把脑子里所有"应该做"、"忘了做"、"担心会忘"的事全部列在一张纸上。列完不要行动，只是列完。然后回到原任务。',
+  '💭 两个问题：1. 此刻想的事是过去还是未来？2. 此刻我能改变它吗？——99%的胡思乱想在这两个问题后自动消散。剩下的1%写下来等会儿处理。',
+  '💭 注意力GPS：你的注意力跑到了哪里？给它一个名字（"我在想那封邮件"），然后像用GPS一样重新设定目的地——"现在，回到这里"。不评判，只导航。',
+  '💭 围墙练习：在心里画一个圈——圈内是"此刻我能控制的事"，圈外是"我无法控制的事"。把圈外的事全部放到外面。现在只待在圈内。',
+];
+
+// ── Anti-self-talk reminders (自言自语干预) ──────────────────────────
+const _selfTalkReminders = [
+  '🤫 觉察标记：这一刻你在自言自语吗？停下来注意一下——你在说什么？对谁说？想达到什么目的？意识本身就是改变的开始。',
+  '🤫 内部化：想说的话，试着在心里默念一遍而不是出声。给自己一个"内部发言"的选项——同样的表达，嘴唇不动。',
+  '🤫 笔代替嘴：想自言自语时，拿起笔把那句话写下来。写的过程已经释放了表达欲，而且写下来的版本往往比说出来的更清晰。',
+  '🤫 呼吸缓冲：在话说出口之前——先做3次深呼吸。3次之后，你可能会发现那句话不需要说出来了，或者可以用更好的方式表达。',
+  '🤫 场景意识：注意什么情况最容易触发自言自语——独处时？紧张时？思考时？认识触发模式，你就能在它发生之前拦截它。',
+  '🤫 唇闭练习：轻轻闭上嘴唇，牙齿微微分开，舌尖顶住上颚。保持这个姿势10秒。身体安静下来后，大脑的语言冲动也会自然减弱。',
+  '🤫 想象录音：想象你的每一句自言自语都被录下来。这些话说给未来回听的你——还值得说吗？这个距离感帮你过滤掉80%的无意义自语。',
+  '🤫 替代动作：想说话时搓搓手指、轻敲桌面、或者捏一下压力球。给表达冲动一个非语言的出口——身体需要做点什么，但不一定是说话。',
+  '🤫 延迟表达：对自己说"先等30秒，如果还想说，再说"。大多数自言自语在30秒的延迟后会自动消散——冲动的高度很短。',
+  '🤫 对话许可：给自己设定"可以自言自语的时间"——比如开车时、洗澡时。在这个时间之外，练习安静。边界让你更有掌控感。',
+  '🤫 一句话规则：如果确实需要自言自语——只允许一句话，说完就停。一句话足以理清思路，连续不断的絮叨只是大脑在空转。',
+  '🤫 声音觉察：注意自己自言自语时的声音——音调、语速、音量。像个旁观者一样观察——"哦，我在用这种声音对自己说话"。觉察创造改变的空间。',
+  '🤫 从说出到想出：每次发现自己在自言自语，就练习把后面的内容转为默想。从"出声思考"过渡到"安静思考"——这是一个可以训练的能力。',
+  '🤫 环境反馈：如果旁边有人，想象你自言自语时他们听到的是什么。这个换位视角不是为了让你尴尬，而是帮你建立外部参照——他人并不需要听到你的每个念头。',
 ];

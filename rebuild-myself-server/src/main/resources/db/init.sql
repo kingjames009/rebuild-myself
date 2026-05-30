@@ -42,6 +42,7 @@ CREATE TABLE `user_goal` (
   `target_time` DATE DEFAULT NULL COMMENT '目标截止日期',
   `progress` INT DEFAULT 0 COMMENT '进度0-100',
   `status` TINYINT DEFAULT 0 COMMENT '0未开始1进行中2已完成',
+  `preferred_segment` VARCHAR(20) DEFAULT NULL COMMENT '首选时段: 上班前/午休/下班后',
   `create_time` DATETIME DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`goal_id`),

@@ -659,45 +659,29 @@ class EliteProvider extends ChangeNotifier {
     // Pass 2: for unmatched goals, create dedicated plan items
     final now = DateTime.now();
     final isWeekend = !HolidayConfig.isWorkday(now);
-    int unmatchedCount = 0;
+    final ws = _workSchedule;
+    // Track how many unmatched goals have been placed into each segment for offset calculation
+    final segmentCounts = <String, int>{};
 
     for (int j = 0; j < active.length; j++) {
       if (matched[j] == true) continue;
       final goal = active[j];
       final title = goal.title!;
-      final type = goal.goalType ?? 0;
       final goalContent = goal.content ?? '';
 
-      // Pick appropriate time slot by goal type
-      String period;
-      int planType;
-      switch (type) {
-        case 3: // health → morning
-          period = isWeekend ? '07:00-07:30' : '06:30-07:00';
-          planType = 4;
-          break;
-        case 2: // finance → evening
-          period = isWeekend ? '20:00-20:30' : '20:00-20:30';
-          planType = 2;
-          break;
-        case 1: // study → evening deep focus
-        default:
-          period = unmatchedCount == 0
-              ? (isWeekend ? '19:00-19:30' : '19:00-19:30')
-              : (isWeekend ? '19:30-20:00' : '19:30-20:00');
-          planType = 1;
-          break;
+      // Determine segment: use goal's preferredSegment, else fall back to type-based default
+      String seg;
+      if (goal.preferredSegment != null && goal.preferredSegment!.isNotEmpty) {
+        seg = goal.preferredSegment!;
+      } else {
+        seg = _defaultSegmentForGoalType(goal.goalType ?? 0);
       }
-      unmatchedCount++;
-      // Offset each unmatched goal by 30 minutes
-      if (unmatchedCount > 1) {
-        final base = _parseTimeToMinutes(period.split('-')[0]);
-        final shifted = base + (unmatchedCount - 1) * 30;
-        final h = shifted ~/ 60;
-        final m = shifted % 60;
-        period = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}-'
-            '${(h + (m + 30) ~/ 60).toString().padLeft(2, '0')}:${((m + 30) % 60).toString().padLeft(2, '0')}';
-      }
+      int planType = _planTypeForSegment(seg, goal.goalType ?? 0);
+      int count = segmentCounts[seg] ?? 0;
+
+      // Convert segment to concrete time period
+      String period = _segmentToTimePeriod(seg, isWeekend, ws, count);
+      segmentCounts[seg] = count + 1;
 
       final execContent = goalContent.isNotEmpty
           ? '【$title】今天执行：$goalContent'
@@ -710,6 +694,64 @@ class EliteProvider extends ChangeNotifier {
         difficulty: 3,
       ));
     }
+  }
+
+  /// Fallback segment for goals without a configured preferredSegment.
+  String _defaultSegmentForGoalType(int type) {
+    switch (type) {
+      case 3: // health
+        return '上班前';
+      case 2: // finance
+        return '下班后';
+      default: // study and others
+        return '下班后';
+    }
+  }
+
+  int _planTypeForSegment(String seg, int goalType) {
+    if (goalType == 2) return 2; // finance
+    if (goalType == 3) return 3; // health/exercise
+    return 1; // study
+  }
+
+  /// Convert a segment name to a concrete "HH:MM-HH:MM" time period.
+  /// Times are derived from the user's [WorkSchedule] so the Elite page
+  /// time settings directly control where goals are placed.
+  /// [offset] is used to stagger multiple goals in the same segment.
+  String _segmentToTimePeriod(String seg, bool isWeekend, WorkSchedule ws, int offset) {
+    String baseStart;
+    int duration = 30;
+    switch (seg) {
+      case '上班前':
+        // Weekday: 30 min after morning start (06:00) — gives time for morning routine first
+        // Weekend: studyStart (configurable, default 08:00)
+        if (isWeekend) {
+          baseStart = ws.studyStart;
+        } else {
+          final m = WorkSchedule.parseMinutes(WorkSchedule.morningStart) + 30;
+          baseStart = WorkSchedule.formatMinutes(m);
+        }
+        break;
+      case '午休':
+        // Right at lunch start (configurable, default 12:00)
+        baseStart = ws.lunchStart;
+        break;
+      case '下班后':
+        // Weekday: right after work ends (workEnd, configurable, default 18:00)
+        // Weekend: 19:00 evening
+        baseStart = isWeekend ? '19:00' : ws.workEnd;
+        break;
+      default:
+        baseStart = isWeekend ? '19:00' : ws.workEnd;
+    }
+    final baseMin = _parseTimeToMinutes(baseStart) + offset * duration;
+    final h = baseMin ~/ 60;
+    final m = baseMin % 60;
+    final endMin = baseMin + duration;
+    final endH = endMin ~/ 60;
+    final endM = endMin % 60;
+    return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}-'
+        '${endH.toString().padLeft(2, '0')}:${endM.toString().padLeft(2, '0')}';
   }
 
   int _parseTimeToMinutes(String t) {
@@ -871,7 +913,18 @@ class EliteProvider extends ChangeNotifier {
 
         case '上班时·上午':
         case '上班时·下午':
-          content = _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
+          // Rotate: 2 focus → 1 mind-wandering → 2 focus → 1 self-talk → repeat
+          if (workFocusIdx % 6 < 2) {
+            content = _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
+          } else if (workFocusIdx % 6 == 2 || workFocusIdx % 6 == 4) {
+            content = _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
+          } else if (workFocusIdx % 6 == 3) {
+            final mind = RemindersStore.current.mindWandering;
+            content = mind.isNotEmpty ? mind[workFocusIdx % mind.length] : _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
+          } else {
+            final talk = RemindersStore.current.selfTalk;
+            content = talk.isNotEmpty ? talk[workFocusIdx % talk.length] : _currentWorkReminders[workFocusIdx % _currentWorkReminders.length];
+          }
           planType = 5;
           difficulty = 1;
           workFocusIdx++;
@@ -929,10 +982,20 @@ class EliteProvider extends ChangeNotifier {
       }
 
       if (content != null) {
-        // Inject rotating anti-short-video psychology nudge to after-work plans
+        // Inject rotating interventions to after-work plans
         if (seg == '下班后') {
-          final nudge = RemindersStore.current.antiDoomscroll[afterWorkNudgeIdx % RemindersStore.current.antiDoomscroll.length];
-          content = '$content\n$nudge';
+          // Rotate: anti-doomscroll → mind-wandering → anti-doomscroll → self-talk → repeat
+          String intervention;
+          if (afterWorkNudgeIdx % 4 < 2) {
+            intervention = RemindersStore.current.antiDoomscroll[afterWorkNudgeIdx % RemindersStore.current.antiDoomscroll.length];
+          } else if (afterWorkNudgeIdx % 4 == 2) {
+            final mind = RemindersStore.current.mindWandering;
+            intervention = mind.isNotEmpty ? mind[afterWorkNudgeIdx % mind.length] : RemindersStore.current.antiDoomscroll[0];
+          } else {
+            final talk = RemindersStore.current.selfTalk;
+            intervention = talk.isNotEmpty ? talk[afterWorkNudgeIdx % talk.length] : RemindersStore.current.antiDoomscroll[0];
+          }
+          content = '$content\n$intervention';
           afterWorkNudgeIdx++;
         }
         generated.add(DailyModelPlan(
@@ -957,6 +1020,7 @@ class EliteProvider extends ChangeNotifier {
     final useBlocks = blocks ?? _weekendBlocks;
     final generated = <DailyModelPlan>[];
     int taskIdx = 0;
+    int interventionIdx = 0;
 
     for (final block in useBlocks) {
       final period = block.periodLabel;
@@ -979,19 +1043,38 @@ class EliteProvider extends ChangeNotifier {
                   task.taskLevel == 1 ? 4 : (task.taskLevel == 2 ? 3 : 2)));
           taskIdx++;
         } else {
+          // Sprinkle behavioral interventions into free weekend slots
+          String freeContent = block.label.isNotEmpty ? block.label : '自由安排 — 学习/阅读/副业';
+          if (interventionIdx % 3 == 0) {
+            final mind = RemindersStore.current.mindWandering;
+            freeContent = mind.isNotEmpty ? mind[interventionIdx % mind.length] : freeContent;
+          } else if (interventionIdx % 3 == 1) {
+            final talk = RemindersStore.current.selfTalk;
+            freeContent = talk.isNotEmpty ? talk[interventionIdx % talk.length] : freeContent;
+          }
+          interventionIdx++;
           generated.add(DailyModelPlan(
               planDate: date,
               timePeriod: period,
-              planContent:
-                  block.label.isNotEmpty ? block.label : '自由安排 — 学习/阅读/副业',
+              planContent: freeContent,
               planType: 0,
               difficulty: 2));
         }
       } else {
+        // For recommendation blocks, sometimes inject interventions
+        String recContent = block.label.isNotEmpty ? block.label : '自由安排';
+        if (interventionIdx % 2 == 0) {
+          final all = [
+            ...RemindersStore.current.mindWandering,
+            ...RemindersStore.current.selfTalk,
+          ];
+          if (all.isNotEmpty) recContent = all[interventionIdx % all.length];
+        }
+        interventionIdx++;
         generated.add(DailyModelPlan(
             planDate: date,
             timePeriod: period,
-            planContent: block.label.isNotEmpty ? block.label : '自由安排',
+            planContent: recContent,
             planType: block.label.contains('运动')
                 ? 3
                 : (block.label.contains('学习') ? 1 : 4),

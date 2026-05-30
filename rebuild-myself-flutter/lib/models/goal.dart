@@ -9,6 +9,7 @@ class Goal {
   final String? targetTime;
   final int? progress;
   final int? status;
+  final String? preferredSegment;
   final String? createTime;
   final String? updateTime;
 
@@ -23,6 +24,7 @@ class Goal {
     this.targetTime,
     this.progress,
     this.status,
+    this.preferredSegment,
     this.createTime,
     this.updateTime,
   });
@@ -46,6 +48,7 @@ class Goal {
       targetTime: (json['targetTime'] ?? json['target_time'] ?? json['targetDate'] ?? json['target_date'])?.toString(),
       progress: parseProgress(json['progress']),
       status: _parseInt(json['status']),
+      preferredSegment: json['preferredSegment'] ?? json['preferred_segment'],
       createTime: (json['createTime'] ?? json['create_time'])?.toString(),
       updateTime: (json['updateTime'] ?? json['update_time'])?.toString(),
     );
@@ -67,6 +70,7 @@ class Goal {
         if (targetTime != null) 'targetTime': targetTime,
         if (progress != null) 'progress': progress,
         if (status != null) 'status': status,
+        if (preferredSegment != null) 'preferredSegment': preferredSegment,
       };
 
   int get progressPercent => (progress ?? 0).clamp(0, 100);
@@ -80,4 +84,11 @@ class Goal {
     const map = {0: '未开始', 1: '进行中', 2: '已完成'};
     return map[status] ?? '进行中';
   }
+
+  String get segmentLabel {
+    const map = {'上班前': '🌅 上班前', '午休': '☀️ 午休', '下班后': '🌆 下班后'};
+    return map[preferredSegment] ?? '不指定';
+  }
+
+  static const segments = ['上班前', '午休', '下班后'];
 }

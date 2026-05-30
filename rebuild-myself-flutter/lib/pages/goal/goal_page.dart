@@ -33,6 +33,7 @@ class _GoalPageState extends State<GoalPage> {
     final contentCtrl = TextEditingController();
     final level = _tab + 1;
     int goalType = 1;
+    String? preferredSegment;
     DateTime? startDate;
     DateTime? targetDate;
 
@@ -157,6 +158,31 @@ class _GoalPageState extends State<GoalPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                // Preferred time segment picker
+                const Text('首选时段', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: ['不指定', ...Goal.segments].map((seg) {
+                    final selected = preferredSegment == seg || (seg == '不指定' && preferredSegment == null);
+                    final label = seg == '不指定' ? '不指定' : seg;
+                    return GestureDetector(
+                      onTap: () => setSt(() => preferredSegment = seg == '不指定' ? null : seg),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: selected ? AppTheme.primary.withValues(alpha: 0.08) : AppTheme.bg,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: selected ? AppTheme.primary : AppTheme.border),
+                        ),
+                        child: Text(label,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                            color: selected ? AppTheme.primary : AppTheme.textSecondary)),
+                      ),
+                    );
+                  }).toList(),
+                ),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () {
@@ -166,6 +192,7 @@ class _GoalPageState extends State<GoalPage> {
                         content: contentCtrl.text, status: 1, progress: 0,
                         startDate: startDate != null ? fmt(startDate) : null,
                         targetTime: targetDate != null ? fmt(targetDate) : null,
+                        preferredSegment: preferredSegment,
                       ));
                       Navigator.pop(ctx);
                     }
@@ -337,6 +364,10 @@ class _GoalCard extends StatelessWidget {
                 children: [
                   _Badge(goal.typeLabel, AppTheme.primary),
                   const SizedBox(width: 6),
+                  if (goal.preferredSegment != null) ...[
+                    _Badge(goal.segmentLabel, AppTheme.warning),
+                    const SizedBox(width: 6),
+                  ],
                   _Badge(goal.statusLabel,
                       goal.status == 1 ? AppTheme.success : AppTheme.textMuted),
                   const Spacer(),
@@ -389,6 +420,7 @@ class _GoalCard extends StatelessWidget {
 
   void _showProgressSheet(BuildContext context, Goal goal) {
     double val = (goal.progress ?? 0).toDouble();
+    String? preferredSegment = goal.preferredSegment;
     DateTime? startDate = goal.startDate != null && goal.startDate!.isNotEmpty
         ? DateTime.tryParse(goal.startDate!)
         : null;
@@ -487,6 +519,31 @@ class _GoalCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              // Preferred time segment picker
+              const Text('首选时段', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: ['不指定', ...Goal.segments].map((seg) {
+                  final selected = preferredSegment == seg || (seg == '不指定' && preferredSegment == null);
+                  final label = seg == '不指定' ? '不指定' : seg;
+                  return GestureDetector(
+                    onTap: () => setSt(() => preferredSegment = seg == '不指定' ? null : seg),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected ? AppTheme.primary.withValues(alpha: 0.08) : AppTheme.bg,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: selected ? AppTheme.primary : AppTheme.border),
+                      ),
+                      child: Text(label,
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                          color: selected ? AppTheme.primary : AppTheme.textSecondary)),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
               Text('${val.round()}%', style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: AppTheme.primary)),
               const SizedBox(height: 12),
               Slider(
@@ -503,6 +560,7 @@ class _GoalCard extends StatelessWidget {
                     status: val >= 100 ? 2 : 1, progress: val.round(),
                     startDate: startDate != null ? fmt(startDate) : null,
                     targetTime: targetDate != null ? fmt(targetDate) : null,
+                    preferredSegment: preferredSegment,
                   ));
                   Navigator.pop(ctx);
                 },
