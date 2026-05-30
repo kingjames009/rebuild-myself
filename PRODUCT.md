@@ -2,6 +2,22 @@
 
 ## 版本历史
 
+### v1.0.7 (2026-05-30)
+
+- **目标首选时段配置**：每个目标可指定首选时段（上班前/午休/下班后/不指定），生成计划时自动匹配。例如「英语演讲」设为首选下班后，计划项自动出现在晚间时段。
+- **时段→时间动态推导**：首选时段的具体时间不再硬编码，改为从 `WorkSchedule` 推导——上班前=06:30（工作日）/ studyStart（休息日）、午休=lunchStart、下班后=workEnd。修改精英对标页的工作时间即可联动所有目标安排。
+- **服务端 AI prompt 增强**：生成计划时每个目标标注用户指定时段，AI 优先遵守用户配置。
+- **数据库迁移**：`user_goal` 表新增 `preferred_segment` 列，NULL 时沿用 type 默认逻辑，向后兼容。
+
+**相关文件：**
+- `lib/models/goal.dart` — 新增 `preferredSegment` 字段 + `segmentLabel`/`segments` 辅助方法
+- `lib/pages/goal/goal_page.dart` — 新建/编辑目标时可选首选时段，卡片显示时段标签
+- `lib/providers/elite_provider.dart` — `_tagPlanWithGoalTitles()` Pass 2 替换硬编码 switch→时段 为 `_segmentToTimePeriod()`，新增 `_defaultSegmentForGoalType()`/`_planTypeForSegment()` fallback
+- 服务端：`UserGoal.java` — 新增 `preferredSegment` 字段
+- 服务端：`DailyModelPlanServiceImpl.java` — `buildPlanPrompt()` 每个目标标注【用户指定时段】，更新编排规则
+- 数据库：`migration_003_goal_preferred_segment.sql` — ALTER TABLE 加列
+- 数据库：`init.sql` — 建表脚本同步加列
+
 ### v1.0.6 (2026-05-19)
 
 - **晨间自检弹窗**：每天打开 App 先弹出晨间自检，选择昨晚睡眠时长（3-12h）和此刻焦虑程度（1-5），确认后自动算出当日保护等级。当日已自检则不再弹窗。

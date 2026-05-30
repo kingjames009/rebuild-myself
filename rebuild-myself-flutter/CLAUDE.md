@@ -111,8 +111,9 @@ AI 不可用时自动 fallback 到本地 `generateTodayPlan()`。
    - **上班时·上午/下午** → **仅工作日**填入冥想专注提醒（30分钟一条），周末保留学习/待办内容
 4. 超出槽位的待办合并到最后一个计划项
 5. 自动判断日类型：周末/节假日用 weekend 模板，其他用 workday 模板
-6. **发声内容移晚间**：含"英语""演讲""口语""朗读"等关键词的计划自动移至 18:00 后
-7. **计时器完成自动标记**：FocusTimerProvider 的 `stopTimer()` 在保存学习记录后，将对应 `daily_model_plan` 行标记为 `isCompleted=1` + `completedAt`
+6. **目标首选时段**：目标可配置 `preferredSegment`（上班前/午休/下班后），未匹配目标自动安排在指定时段，具体时间从 `WorkSchedule` 推导
+7. **发声内容移晚间**：含"英语""演讲""口语""朗读"等关键词的计划自动移至 18:00 后（安全网，首选时段已覆盖大部分场景）
+8. **计时器完成自动标记**：FocusTimerProvider 的 `stopTimer()` 在保存学习记录后，将对应 `daily_model_plan` 行标记为 `isCompleted=1` + `completedAt`
 
 **配置（精英对标页 `ElitePage`）**：
 - 工作时间设置：工作起止、午休、学习时段
