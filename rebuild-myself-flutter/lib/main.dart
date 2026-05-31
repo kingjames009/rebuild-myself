@@ -17,6 +17,8 @@ import 'providers/empty_mood_provider.dart';
 import 'providers/report_provider.dart';
 import 'providers/aspiration_provider.dart';
 import 'providers/focus_timer_provider.dart';
+import 'providers/venting_provider.dart';
+import 'providers/daily_summary_provider.dart';
 import 'pages/auth/login_page.dart';
 import 'pages/auth/privacy_lock_page.dart';
 import 'services/api_client.dart';
@@ -46,6 +48,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ReportProvider()),
         ChangeNotifierProvider(create: (_) => AspirationProvider()),
         ChangeNotifierProvider(create: (_) => FocusTimerProvider()),
+        ChangeNotifierProvider(create: (_) => VentingProvider()),
+        ChangeNotifierProvider(create: (_) => DailySummaryProvider()),
       ],
       child: MaterialApp(
         title: '精进｜全维度人生重塑',

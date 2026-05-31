@@ -2,6 +2,30 @@
 
 ## 版本历史
 
+### v1.0.8 (2026-05-30)
+
+- **计划完成四状态体系**：从二进制完成/未完成扩展为四状态——未做/做了部分/完成/超额完成。计划列表中以不同颜色区分：灰（未做）、橙（部分）、绿（完成）、金（超额）。完成状态 chip 替代原有的 Switch 开关。
+- **完成预设快捷填入**：点击计划项记录实际状况时，提供 6 个预设短语可一键填入，支持二次点击追加。上班场景无需手打，点一下就行。
+- **定点吐槽功能**：每天可配置固定吐槽时间，到点生成 💭 吐槽计划项，打开大文本编辑器写下当天所有不愉快的事。纯本地存储，不上传服务器。
+- **每日经验总结功能**：每天可配置固定总结时间（默认 22:00），回顾当天收获与教训。纯本地存储，不上传服务器。
+- **WorkSchedule 扩展**：新增 `ventingTime` 和 `summaryTime` 两个可选字段，计划生成时自动在对应时间块插入吐槽/总结项。
+
+**相关文件：**
+- `lib/models/daily_plan.dart` — 新增 `completionState`/`completionLabel` getter，`typeLabel` 添加 6=吐槽、7=总结
+- `lib/models/daily_summary_entry.dart` — 新增：每日总结数据模型
+- `lib/models/venting_entry.dart` — 新增：定点吐槽数据模型
+- `lib/models/time_block.dart` — `WorkSchedule` 新增 `ventingTime`/`summaryTime`
+- `lib/providers/daily_summary_provider.dart` — 新增：总结提供者（本地存储，按日期 upsert）
+- `lib/providers/venting_provider.dart` — 新增：吐槽提供者（本地存储，按日期 upsert）
+- `lib/providers/elite_provider.dart` — 计划生成时处理吐槽/总结时段 + 四状态完成
+- `lib/providers/focus_timer_provider.dart` — 计时器完成自动标记改为状态 2（完成）
+- `lib/pages/home/home_page.dart` — 完成预设 + 四状态 chip + 吐槽/总结配置 + 写作工作表 + 历史
+- `lib/main.dart` — 注册 `VentingProvider`/`DailySummaryProvider`
+- `lib/services/local_storage_io.dart` — 注册 `venting_log`/`daily_summary_log` 表
+- `lib/services/local_storage_web.dart` — 同上
+- 服务端：`DailyModelPlanServiceImpl.java` — `toggleComplete`/`updateNote` 适配四状态
+- 服务端：`AiPsychologicalReportServiceImpl.java` — 报告支持四状态描述
+
 ### v1.0.7 (2026-05-30)
 
 - **目标首选时段配置**：每个目标可指定首选时段（上班前/午休/下班后/不指定），生成计划时自动匹配。例如「英语演讲」设为首选下班后，计划项自动出现在晚间时段。

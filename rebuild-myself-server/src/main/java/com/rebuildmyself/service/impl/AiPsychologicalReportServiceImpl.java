@@ -155,7 +155,7 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
                 String planContent = plan.getPlanContent() != null ? plan.getPlanContent() : "";
                 String actualNote = plan.getActualNote() != null && !plan.getActualNote().isEmpty()
                         ? plan.getActualNote() : "";
-                boolean completed = plan.getIsCompleted() != null && plan.getIsCompleted() == 1;
+                int compStatus = plan.getIsCompleted() != null ? plan.getIsCompleted() : 0;
 
                 // Find matching study records for this plan date
                 int totalMinutes = 0;
@@ -170,14 +170,28 @@ public class AiPsychologicalReportServiceImpl extends ServiceImpl<AiPsychologica
                 data.append(i + 1).append(". [").append(period).append("] ");
                 data.append(planContent).append("\n");
 
-                if (completed && actualNote.isEmpty()) {
-                    data.append("   → 状态：已完成（计时器跑完，但未记录实际状况）\n");
-                } else if (completed && !actualNote.isEmpty()) {
-                    data.append("   → 状态：已完成，实际记录：").append(actualNote).append("\n");
-                } else if (!completed && !actualNote.isEmpty()) {
-                    data.append("   → 状态：有记录但未标记完成，实际记录：").append(actualNote).append("\n");
+                if (compStatus >= 3) {
+                    data.append("   → 状态：超额完成");
+                    if (!actualNote.isEmpty()) data.append("，实际记录：").append(actualNote);
+                    data.append("\n");
+                } else if (compStatus >= 2) {
+                    if (actualNote.isEmpty()) {
+                        data.append("   → 状态：已完成（计时器跑完，但未记录实际状况）\n");
+                    } else {
+                        data.append("   → 状态：已完成，实际记录：").append(actualNote).append("\n");
+                    }
+                } else if (compStatus == 1) {
+                    if (actualNote.isEmpty()) {
+                        data.append("   → 状态：做了部分\n");
+                    } else {
+                        data.append("   → 状态：做了部分，实际记录：").append(actualNote).append("\n");
+                    }
                 } else {
-                    data.append("   → 状态：未做（无任何记录）\n");
+                    if (actualNote.isEmpty()) {
+                        data.append("   → 状态：未做（无任何记录）\n");
+                    } else {
+                        data.append("   → 状态：有记录但未标记完成，实际记录：").append(actualNote).append("\n");
+                    }
                 }
 
                 if (totalMinutes > 0) {

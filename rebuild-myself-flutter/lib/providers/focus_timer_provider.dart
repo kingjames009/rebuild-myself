@@ -399,8 +399,8 @@ class FocusTimerProvider extends ChangeNotifier {
     // Mark the corresponding daily plan as completed.
     if (period != null) {
       final done = {
-        'isCompleted': 1,
-        'is_completed': 1,
+        'isCompleted': 2,
+        'is_completed': 2,
         'completedAt': DateTime.now().toIso8601String(),
         'completed_at': DateTime.now().toIso8601String(),
       };

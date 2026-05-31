@@ -21,6 +21,8 @@ import '../../config/reminders.dart';
 import '../../config/holiday_config.dart';
 import '../../models/time_block.dart';
 import '../../models/custom_priority.dart';
+import '../../providers/venting_provider.dart';
+import '../../providers/daily_summary_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -33,6 +35,22 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  static const _notePresets = [
+    '完成了，感觉不错',
+    '完成了，有点勉强',
+    '做了一半，被工作打断了',
+    '完全没做，状态不好',
+    '没做，走神刷手机了',
+    '推迟了，后面补上',
+  ];
+
+  static const _completionStates = [
+    _CompletionState(0, '未做', '❌', AppTheme.textMuted),
+    _CompletionState(1, '部分', '🔄', AppTheme.warning),
+    _CompletionState(2, '完成', '✅', AppTheme.success),
+    _CompletionState(3, '超额', '🌟', Color(0xFFD4A017)),
+  ];
+
   bool _onboardingShown = false;
   int _lastTabSignal = 0;
   Timer? _focusRefreshTimer;
@@ -136,6 +154,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await context.read<FinanceProvider>().loadAll();
     await context.read<StudyProvider>().loadAll();
     await context.read<EliteProvider>().loadAll();
+    await context.read<VentingProvider>().loadAll();
+    await context.read<DailySummaryProvider>().loadAll();
     await context.read<FocusTimerProvider>().restoreSession();
 
     // Sync server plans in background (don't block the UI)
@@ -582,6 +602,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     String lunchEnd = ws.lunchEnd;
     String studyStart = ws.studyStart;
     String studyEnd = ws.studyEnd;
+    String ventingTime = ws.ventingTime;
+    bool ventingEnabled = ws.ventingTime.isNotEmpty;
+    String summaryTime = ws.summaryTime;
+    bool summaryEnabled = ws.summaryTime.isNotEmpty;
     String configDayType = 'workday';
     bool showTimeBlocks = false;
 
@@ -680,6 +704,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   workStart: workStart, workEnd: workEnd,
                                   lunchStart: lunchStart, lunchEnd: lunchEnd,
                                   studyStart: studyStart, studyEnd: studyEnd,
+                                  ventingTime: ventingTime,
+                                  summaryTime: summaryTime,
                                 );
                                 await context.read<EliteProvider>().saveWorkSchedule(schedule);
                                 if (ctx.mounted) {
@@ -696,7 +722,91 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 14),
 
-                    // ---- Section 2: Custom Priorities ----
+                    // ---- Section 2: Venting ----
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.warning.withValues(alpha: 0.3)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Text('💭 定点吐槽', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            const Spacer(),
+                            Switch(
+                              value: ventingEnabled,
+                              activeColor: AppTheme.warning,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (v) => setSheetState(() {
+                                ventingEnabled = v;
+                                if (!v) {
+                                  ventingTime = '';
+                                } else if (ventingTime.isEmpty) {
+                                  ventingTime = '20:00';
+                                }
+                              }),
+                            ),
+                          ]),
+                          const SizedBox(height: 4),
+                          const Text('每天定时排空工作生活中的负面情绪',
+                              style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          if (ventingEnabled && ventingTime.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            _buildTimeCell('吐槽时间', ventingTime, (v) => setSheetState(() => ventingTime = v)),
+                            const SizedBox(height: 8),
+                            const Text('生成计划后，到设定时间会出现吐槽项，点击即可开始倾诉',
+                                style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---- Section 3: Summary ----
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.25)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            const Text('📝 每日总结', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            const Spacer(),
+                            Switch(
+                              value: summaryEnabled,
+                              activeColor: AppTheme.primary,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (v) => setSheetState(() {
+                                summaryEnabled = v;
+                                if (!v) {
+                                  summaryTime = '';
+                                } else if (summaryTime.isEmpty) {
+                                  summaryTime = '22:00';
+                                }
+                              }),
+                            ),
+                          ]),
+                          const SizedBox(height: 4),
+                          const Text('每天定时回顾当天的收获与教训',
+                              style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          if (summaryEnabled && summaryTime.isNotEmpty) ...[
+                            const SizedBox(height: 14),
+                            _buildTimeCell('总结时间', summaryTime, (v) => setSheetState(() => summaryTime = v)),
+                            const SizedBox(height: 8),
+                            const Text('生成计划后，到设定时间会出现总结项，点击即可开始回顾',
+                                style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ---- Section 4: Custom Priorities ----
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -1253,7 +1363,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         final typeLabel = _typeLabel(type);
                         final existingNote = p.actualNote;
                         final hasNote = existingNote != null && existingNote.isNotEmpty;
-                        final completed = p.isCompleted == 1;
+                        final compState = p.completionState;
+                        final completed = compState >= 2;
+                        final partial = compState == 1;
+                        final overachieved = compState == 3;
+                        final isVenting = type == 6;
+                        final isSummary = type == 7;
                         final isCurrent = i == currentIndex;
                         return Container(
                           key: ValueKey('${p.planDate}_${p.timePeriod}'),
@@ -1262,19 +1377,31 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 10, horizontal: 12),
                             decoration: BoxDecoration(
-                              color: isCurrent
-                                  ? AppTheme.primary.withValues(alpha: 0.08)
-                                  : completed
-                                      ? AppTheme.success.withValues(alpha: 0.04)
-                                      : hasNote
-                                          ? AppTheme.success.withValues(alpha: 0.04)
-                                          : AppTheme.primary.withValues(alpha: 0.02),
+                              color: isSummary
+                                  ? const Color(0xFF3498DB).withValues(alpha: 0.08)
+                                  : isVenting
+                                      ? AppTheme.warning.withValues(alpha: 0.08)
+                                      : partial
+                                          ? AppTheme.warning.withValues(alpha: 0.06)
+                                          : isCurrent
+                                              ? AppTheme.primary.withValues(alpha: 0.08)
+                                              : completed
+                                                  ? AppTheme.success.withValues(alpha: 0.04)
+                                                  : hasNote
+                                                      ? AppTheme.success.withValues(alpha: 0.04)
+                                                      : AppTheme.primary.withValues(alpha: 0.02),
                               borderRadius: BorderRadius.circular(8),
-                              border: isCurrent
-                                  ? Border.all(color: AppTheme.primary.withValues(alpha: 0.3))
-                                  : (completed || hasNote)
-                                      ? Border.all(color: AppTheme.success.withValues(alpha: 0.15))
-                                      : null,
+                              border: isSummary
+                                  ? Border.all(color: const Color(0xFF3498DB).withValues(alpha: 0.3))
+                                  : isVenting
+                                      ? Border.all(color: AppTheme.warning.withValues(alpha: 0.3))
+                                      : partial
+                                          ? Border.all(color: AppTheme.warning.withValues(alpha: 0.2))
+                                          : isCurrent
+                                              ? Border.all(color: AppTheme.primary.withValues(alpha: 0.3))
+                                              : (completed || hasNote)
+                                                  ? Border.all(color: AppTheme.success.withValues(alpha: 0.15))
+                                                  : null,
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1289,16 +1416,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                                 const SizedBox(width: 6),
                                 GestureDetector(
-                                  onTap: () => _showFocusSheet(
-                                      context, dateStr, period, content, existingNote),
+                                  onTap: () => isSummary
+                                      ? _showSummarySheet(context, dateStr, period)
+                                      : isVenting
+                                          ? _showVentingSheet(context, dateStr, period)
+                                          : _showFocusSheet(
+                                              context, dateStr, period, content, existingNote),
                                   child: Container(
                                     width: 10,
                                     height: 10,
                                     margin: const EdgeInsets.only(top: 4),
                                     decoration: BoxDecoration(
-                                        color: (completed || hasNote)
-                                            ? AppTheme.success
-                                            : AppTheme.primary,
+                                        color: isSummary
+                                            ? const Color(0xFF3498DB)
+                                            : isVenting
+                                                ? AppTheme.warning
+                                                : overachieved
+                                                    ? const Color(0xFFD4A017)
+                                                    : partial
+                                                        ? AppTheme.warning
+                                                        : (completed || hasNote)
+                                                            ? AppTheme.success
+                                                            : AppTheme.primary,
                                         shape: BoxShape.circle),
                                   ),
                                 ),
@@ -1331,8 +1470,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: GestureDetector(
-                                    onTap: () => _showContentEditSheet(
-                                        context, dateStr, period, content),
+                                    onTap: () => isSummary
+                                        ? _showSummarySheet(context, dateStr, period)
+                                        : isVenting
+                                            ? _showVentingSheet(context, dateStr, period)
+                                            : _showContentEditSheet(
+                                                context, dateStr, period, content),
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
@@ -1360,25 +1503,52 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                               padding: const EdgeInsets.symmetric(
                                                   horizontal: 6, vertical: 1),
                                               decoration: BoxDecoration(
-                                                  color: AppTheme.success
-                                                      .withValues(alpha: 0.1),
+                                                  color: isSummary
+                                                      ? const Color(0xFF3498DB).withValues(alpha: 0.1)
+                                                      : isVenting
+                                                          ? AppTheme.warning.withValues(alpha: 0.1)
+                                                          : AppTheme.success.withValues(alpha: 0.1),
                                                   borderRadius:
                                                       BorderRadius.circular(4)),
                                               child: Text(typeLabel,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                       fontSize: 10,
-                                                      color: AppTheme.success)),
+                                                      color: isSummary
+                                                          ? const Color(0xFF3498DB)
+                                                          : isVenting
+                                                              ? AppTheme.warning
+                                                              : AppTheme.success)),
                                             ),
-                                            if (completed) ...[
+                                            if (overachieved) ...[
+                                              const SizedBox(width: 8),
+                                              const Icon(Icons.auto_awesome,
+                                                  size: 13,
+                                                  color: Color(0xFFD4A017)),
+                                              const SizedBox(width: 2),
+                                              const Text('超额完成',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: Color(0xFFD4A017))),
+                                            ] else if (completed) ...[
                                               const SizedBox(width: 8),
                                               const Icon(Icons.check_circle,
                                                   size: 13,
                                                   color: AppTheme.success),
                                               const SizedBox(width: 2),
-                                              const Text('已完成',
+                                              const Text('完成',
                                                   style: TextStyle(
                                                       fontSize: 11,
                                                       color: AppTheme.success)),
+                                            ] else if (partial) ...[
+                                              const SizedBox(width: 8),
+                                              const Icon(Icons.hourglass_top,
+                                                  size: 13,
+                                                  color: AppTheme.warning),
+                                              const SizedBox(width: 2),
+                                              const Text('做了部分',
+                                                  style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: AppTheme.warning)),
                                             ] else if (hasNote) ...[
                                               const SizedBox(width: 8),
                                               const Icon(Icons.notes,
@@ -1415,16 +1585,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ),
                                 const SizedBox(width: 4),
                                 GestureDetector(
-                                  onTap: () => _showFocusSheet(
-                                      context, dateStr, period, content, existingNote),
+                                  onTap: () => isSummary
+                                      ? _showSummarySheet(context, dateStr, period)
+                                      : isVenting
+                                          ? _showVentingSheet(context, dateStr, period)
+                                          : _showFocusSheet(
+                                              context, dateStr, period, content, existingNote),
                                   child: Icon(
-                                    hasNote
-                                        ? Icons.edit_note
-                                        : Icons.add_circle_outline,
+                                    isSummary
+                                        ? Icons.auto_stories
+                                        : isVenting
+                                            ? Icons.psychology
+                                            : hasNote
+                                                ? Icons.edit_note
+                                                : Icons.add_circle_outline,
                                     size: 18,
-                                    color: hasNote
-                                        ? AppTheme.success
-                                        : AppTheme.textMuted,
+                                    color: isSummary
+                                        ? const Color(0xFF3498DB)
+                                        : isVenting
+                                            ? AppTheme.warning
+                                            : hasNote
+                                                ? AppTheme.success
+                                                : AppTheme.textMuted,
                                   ),
                                 ),
                               ],
@@ -1532,7 +1714,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 break;
               }
             }
-            final completed = currentPlan?.isCompleted == 1;
+            final compState = currentPlan?.completionState ?? 0;
             final timerRunning = timer.isRunning && timer.matchesPlan(date, period);
             return Padding(
               padding: EdgeInsets.only(
@@ -1800,28 +1982,49 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                     const SizedBox(height: 20),
 
-                    // ---- Completion Toggle ----
+                    // ---- Completion State Selector ----
                     Row(
                       children: [
-                        Icon(
-                          completed ? Icons.check_circle : Icons.radio_button_unchecked,
-                          size: 22,
-                          color: completed ? AppTheme.success : AppTheme.textMuted,
-                        ),
-                        const SizedBox(width: 10),
-                        const Expanded(
-                          child: Text('标记为已完成',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                        ),
-                        Switch(
-                          value: completed,
-                          activeTrackColor: AppTheme.success,
-                          onChanged: (v) async {
-                            final newVal = v ? 1 : 0;
-                            await context.read<EliteProvider>().updatePlanCompletion(date, period, newVal);
-                            setSheetState(() {});
-                          },
-                        ),
+                        for (final st in _completionStates)
+                          Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                right: st.value != _completionStates.last.value ? 6 : 0,
+                              ),
+                              child: GestureDetector(
+                                onTap: () async {
+                                  await context.read<EliteProvider>().updatePlanCompletion(date, period, st.value);
+                                  setSheetState(() {});
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: compState == st.value
+                                        ? st.activeColor.withValues(alpha: 0.12)
+                                        : AppTheme.primary.withValues(alpha: 0.03),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: compState == st.value
+                                          ? st.activeColor.withValues(alpha: 0.35)
+                                          : AppTheme.border,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Text(st.icon, style: const TextStyle(fontSize: 18)),
+                                      const SizedBox(height: 3),
+                                      Text(st.label,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            color: compState == st.value ? st.activeColor : AppTheme.textSecondary,
+                                          )),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -1830,8 +2033,45 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const Text('实际状况记录',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    const Text('记录这个时段实际发生了什么',
+                    const Text('点击预设快速填入，或手动输入',
                         style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final preset in _notePresets)
+                          GestureDetector(
+                            onTap: () {
+                              noteCtrl.text = noteCtrl.text.isEmpty
+                                  ? preset
+                                  : '${noteCtrl.text}；$preset';
+                              setSheetState(() {});
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: noteCtrl.text.contains(preset)
+                                    ? AppTheme.primary.withValues(alpha: 0.1)
+                                    : AppTheme.primary.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: noteCtrl.text.contains(preset)
+                                      ? AppTheme.primary.withValues(alpha: 0.25)
+                                      : AppTheme.border,
+                                ),
+                              ),
+                              child: Text(preset,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: noteCtrl.text.contains(preset)
+                                        ? AppTheme.primary
+                                        : AppTheme.textSecondary,
+                                  )),
+                            ),
+                          ),
+                      ],
+                    ),
                     const SizedBox(height: 10),
                     TextField(
                       controller: noteCtrl,
@@ -2127,8 +2367,352 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _showVentingSheet(BuildContext context, String date, String period) {
+    final ventingProv = context.read<VentingProvider>();
+    final todayEntry = ventingProv.todayEntry;
+    final ctrl = TextEditingController(text: todayEntry?.content ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppTheme.warning.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(period,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.warning)),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('💭 定点吐槽', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _showVentingHistory(context),
+                      icon: const Icon(Icons.history, size: 16),
+                      label: const Text('历史', style: TextStyle(fontSize: 12)),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  const Text('写下今天让你不舒服的事，全部排空吧',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: ctrl,
+                    maxLines: 12,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: '今天发生了什么让你不舒服？\n\n工作上的烦心事、人际关系的困扰、\n对自己的不满和委屈...\n\n全部写出来，不要压抑，这是你的专属排空时间',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    onChanged: (v) => setSheetState(() {}),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('${ctrl.text.length} / 2000',
+                          style: TextStyle(fontSize: 11,
+                              color: ctrl.text.length > 1800 ? AppTheme.danger : AppTheme.textMuted)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (ctrl.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('写点什么再保存吧'), duration: Duration(seconds: 1)),
+                          );
+                          return;
+                        }
+                        await ventingProv.saveForDate(date, ctrl.text.trim());
+                        await context.read<EliteProvider>().updatePlanCompletion(date, period, 2);
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('已排空情绪垃圾 ${ctrl.text.length} 字'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.delete_sweep, size: 20),
+                      label: const Text('排空并保存', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.warning,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showVentingHistory(BuildContext context) {
+    final ventingProv = context.read<VentingProvider>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          builder: (_, scrollCtrl) {
+            return ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Text('💭 吐槽历史记录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text('回顾过往，对比心境变化', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                const SizedBox(height: 16),
+                if (ventingProv.entries.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Text('还没有吐槽记录\n开始你的第一次排空吧',
+                          textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textMuted)),
+                    ),
+                  )
+                else
+                  ...ventingProv.entries.map((e) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ExpansionTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.warning.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.psychology, size: 18, color: AppTheme.warning),
+                          ),
+                          title: Text(e.recordDate ?? '',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                            (e.content ?? '').length > 40
+                                ? '${e.content!.substring(0, 40)}...'
+                                : (e.content ?? ''),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Text(e.content ?? '', style: const TextStyle(fontSize: 13, height: 1.5)),
+                            ),
+                          ],
+                        ),
+                      )),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSummarySheet(BuildContext context, String date, String period) {
+    final summaryProv = context.read<DailySummaryProvider>();
+    final todayEntry = summaryProv.todayEntry;
+    final ctrl = TextEditingController(text: todayEntry?.content ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 20, right: 20, top: 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3498DB).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(period,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF3498DB))),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text('📝 每日总结', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    TextButton.icon(
+                      onPressed: () => _showSummaryHistory(context),
+                      icon: const Icon(Icons.history, size: 16),
+                      label: const Text('历史', style: TextStyle(fontSize: 12)),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  const Text('回顾今天的收获、教训与感悟',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: ctrl,
+                    maxLines: 12,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: '今天学到了什么？\n\n做对了什么？做错了什么？\n哪些可以改进？\n\n记录今天的经验和感悟...',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    onChanged: (v) => setSheetState(() {}),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text('${ctrl.text.length} / 2000',
+                          style: TextStyle(fontSize: 11,
+                              color: ctrl.text.length > 1800 ? AppTheme.danger : AppTheme.textMuted)),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (ctrl.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('写点什么再保存吧'), duration: Duration(seconds: 1)),
+                          );
+                          return;
+                        }
+                        await summaryProv.saveForDate(date, ctrl.text.trim());
+                        await context.read<EliteProvider>().updatePlanCompletion(date, period, 2);
+                        if (ctx.mounted) Navigator.of(ctx).pop();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('已保存今日总结 ${ctrl.text.length} 字'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.save, size: 20),
+                      label: const Text('保存总结', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3498DB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showSummaryHistory(BuildContext context) {
+    final summaryProv = context.read<DailySummaryProvider>();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.5,
+          minChildSize: 0.3,
+          maxChildSize: 0.85,
+          builder: (_, scrollCtrl) {
+            return ListView(
+              controller: scrollCtrl,
+              padding: const EdgeInsets.all(20),
+              children: [
+                const Text('📝 总结历史记录', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 4),
+                const Text('回顾你的成长轨迹', style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                const SizedBox(height: 16),
+                if (summaryProv.entries.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: Text('还没有总结记录\n开始你的第一次回顾吧',
+                          textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textMuted)),
+                    ),
+                  )
+                else
+                  ...summaryProv.entries.map((e) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ExpansionTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF3498DB).withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(Icons.auto_stories, size: 18, color: Color(0xFF3498DB)),
+                          ),
+                          title: Text(e.recordDate ?? '',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                            (e.content ?? '').length > 40
+                                ? '${e.content!.substring(0, 40)}...'
+                                : (e.content ?? ''),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              child: Text(e.content ?? '', style: const TextStyle(fontSize: 13, height: 1.5)),
+                            ),
+                          ],
+                        ),
+                      )),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   String _typeLabel(int t) {
-    const m = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 0: '综合'};
+    const m = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 6: '吐槽', 7: '总结', 0: '综合'};
     return m[t] ?? '综合';
   }
 }
@@ -2362,7 +2946,7 @@ class _CurrentFocusCard extends StatelessWidget {
   }
 
   static String _planTypeLabel(int? t) {
-    const m = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 0: '综合'};
+    const m = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 6: '吐槽', 7: '总结', 0: '综合'};
     return m[t] ?? '综合';
   }
 }
@@ -2549,5 +3133,13 @@ class _TimeFieldState extends State<_TimeField> {
   void _notify() {
     widget.onChanged('$_hour:$_minute');
   }
+}
+
+class _CompletionState {
+  final int value;
+  final String label;
+  final String icon;
+  final Color activeColor;
+  const _CompletionState(this.value, this.label, this.icon, this.activeColor);
 }
 

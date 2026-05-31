@@ -51,8 +51,23 @@ class DailyModelPlan {
         if (completedAt != null) 'completedAt': completedAt,
       };
 
+  int get completionState => isCompleted ?? 0;
+
+  String get completionLabel {
+    switch (completionState) {
+      case 3:
+        return '超额完成';
+      case 2:
+        return '完成';
+      case 1:
+        return '做了部分';
+      default:
+        return '未做';
+    }
+  }
+
   String get typeLabel {
-    const map = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 0: '综合'};
+    const map = {1: '学习', 2: '副业', 3: '阅读', 4: '休闲', 5: '心理', 6: '吐槽', 7: '总结', 0: '综合'};
     return map[planType] ?? '综合';
   }
 

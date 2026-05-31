@@ -73,6 +73,12 @@ class WorkSchedule {
   String studyStart;
   String studyEnd;
 
+  // Daily venting time (empty = disabled)
+  String ventingTime;
+
+  // Daily summary time (empty = disabled)
+  String summaryTime;
+
   WorkSchedule({
     this.workStart = '09:00',
     this.workEnd = '18:00',
@@ -80,6 +86,8 @@ class WorkSchedule {
     this.lunchEnd = '13:00',
     this.studyStart = '08:00',
     this.studyEnd = '22:00',
+    this.ventingTime = '',
+    this.summaryTime = '',
   });
 
   static const morningStart = '06:00';
@@ -97,6 +105,8 @@ class WorkSchedule {
         lunchEnd: json['lunchEnd'] ?? json['lunch_end'] ?? '13:00',
         studyStart: json['studyStart'] ?? json['study_start'] ?? '08:00',
         studyEnd: json['studyEnd'] ?? json['study_end'] ?? '22:00',
+        ventingTime: json['ventingTime'] ?? json['venting_time'] ?? '',
+        summaryTime: json['summaryTime'] ?? json['summary_time'] ?? '',
       );
 
   Map<String, dynamic> toJson() => {
@@ -106,6 +116,8 @@ class WorkSchedule {
         'lunchEnd': lunchEnd,
         'studyStart': studyStart,
         'studyEnd': studyEnd,
+        'ventingTime': ventingTime,
+        'summaryTime': summaryTime,
       };
 
   WorkSchedule copy() => WorkSchedule(
@@ -115,6 +127,8 @@ class WorkSchedule {
         lunchEnd: lunchEnd,
         studyStart: studyStart,
         studyEnd: studyEnd,
+        ventingTime: ventingTime,
+        summaryTime: summaryTime,
       );
 
   static WorkSchedule defaultSchedule() => WorkSchedule();

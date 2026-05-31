@@ -302,7 +302,7 @@ class EliteProvider extends ChangeNotifier {
   /// Toggle the completion status of a plan item.
   Future<void> updatePlanCompletion(String planDate, String timePeriod, int isCompleted) async {
     final db = await DatabaseHelper().db;
-    final completedAt = isCompleted == 1 ? DateTime.now().toIso8601String() : null;
+    final completedAt = isCompleted >= 2 ? DateTime.now().toIso8601String() : null;
     await db.update('daily_model_plan', {
       'isCompleted': isCompleted,
       'completedAt': completedAt,
@@ -596,7 +596,7 @@ class EliteProvider extends ChangeNotifier {
     final isWeekend = !HolidayConfig.isWorkday(DateTime.now());
 
     final generated = isWeekend
-        ? _buildWeekendPlans(date, todayTasks, blocks)
+        ? _buildWeekendPlans(date, todayTasks, blocks, ws: _workSchedule)
         : _buildWeekdayPlans(date, todayTasks);
 
     // Post-process: tag plans with matching goal titles
@@ -771,6 +771,15 @@ class EliteProvider extends ChangeNotifier {
     return goalWords.any((w) => content.contains(w));
   }
 
+  /// Returns true if [ventingTime] falls within the time range [blockStart, blockEnd).
+  bool _blockContainsTime(String blockStart, String blockEnd, String ventingTime) {
+    if (ventingTime.isEmpty) return false;
+    final bs = WorkSchedule.parseMinutes(blockStart);
+    final be = WorkSchedule.parseMinutes(blockEnd);
+    final vt = WorkSchedule.parseMinutes(ventingTime);
+    return vt >= bs && vt < be;
+  }
+
   /// Returns true if the given time string falls within a work segment.
   /// Handles both "HH:MM" and "HH:MM-HH:MM" formats.
   /// Returns false for non-standard formats (e.g. "晨间", "上午" from server fallback).
@@ -883,6 +892,28 @@ class EliteProvider extends ChangeNotifier {
       String? content;
       int planType = 0;
       int difficulty = 2;
+
+      // Venting slot: if this block covers the configured venting time, insert it
+      if (ws.ventingTime.isNotEmpty && _blockContainsTime(block.start, block.end, ws.ventingTime)) {
+        generated.add(DailyModelPlan(
+            planDate: date,
+            timePeriod: period,
+            planContent: '💭 定点吐槽：写下今天所有的不愉快，全部排空',
+            planType: 6,
+            difficulty: 1));
+        continue;
+      }
+
+      // Summary slot: if this block covers the configured summary time, insert it
+      if (ws.summaryTime.isNotEmpty && _blockContainsTime(block.start, block.end, ws.summaryTime)) {
+        generated.add(DailyModelPlan(
+            planDate: date,
+            timePeriod: period,
+            planContent: '📝 每日总结：今天学到了什么，哪些可以做得更好',
+            planType: 7,
+            difficulty: 1));
+        continue;
+      }
 
       switch (seg) {
         case '上班前':
@@ -1013,7 +1044,7 @@ class EliteProvider extends ChangeNotifier {
   // ---- Weekend: original logic (builds list, no DB) ----
 
   List<DailyModelPlan> _buildWeekendPlans(String date, List<TaskTodo> todayTasks,
-      List<TimeBlockConfig>? blocks) {
+      List<TimeBlockConfig>? blocks, {WorkSchedule? ws}) {
     final tasks = List<TaskTodo>.from(todayTasks)
       ..sort((a, b) => (a.taskLevel ?? 4).compareTo(b.taskLevel ?? 4));
 
@@ -1024,6 +1055,28 @@ class EliteProvider extends ChangeNotifier {
 
     for (final block in useBlocks) {
       final period = block.periodLabel;
+      // Venting slot: if this block covers the configured venting time, insert it
+      if (ws != null && ws.ventingTime.isNotEmpty && _blockContainsTime(block.start, block.end, ws.ventingTime)) {
+        generated.add(DailyModelPlan(
+            planDate: date,
+            timePeriod: period,
+            planContent: '💭 定点吐槽：写下今天所有的不愉快，全部排空',
+            planType: 6,
+            difficulty: 1));
+        continue;
+      }
+
+      // Summary slot: if this block covers the configured summary time, insert it
+      if (ws != null && ws.summaryTime.isNotEmpty && _blockContainsTime(block.start, block.end, ws.summaryTime)) {
+        generated.add(DailyModelPlan(
+            planDate: date,
+            timePeriod: period,
+            planContent: '📝 每日总结：今天学到了什么，哪些可以做得更好',
+            planType: 7,
+            difficulty: 1));
+        continue;
+      }
+
       if (block.type == 0) {
         generated.add(DailyModelPlan(
             planDate: date,

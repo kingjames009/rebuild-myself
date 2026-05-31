@@ -1,7 +1,7 @@
 name: rebuild_myself_flutter
 description: "精进｜全维度人生重塑自律成长 APP"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.2+3
 
 environment:
   sdk: ^3.11.5

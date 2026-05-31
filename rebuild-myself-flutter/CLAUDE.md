@@ -90,11 +90,13 @@ flutter build apk --release
 | 模型 | 对应表 | 关键字段 |
 |------|--------|----------|
 | `TaskTodo` | `task_todo` | taskTitle, taskLevel(1-4四象限), isComplete, taskDate |
-| `DailyModelPlan` | `daily_model_plan` | planDate, timePeriod("18:00-18:30"), planContent, planType, difficulty |
+| `DailyModelPlan` | `daily_model_plan` | planDate, timePeriod("18:00-18:30"), planContent, planType(0-7), difficulty, isCompleted(0-3) |
 | `DailyCompareCheck` | `daily_compare_check` | planDate, deviationContent, escapeReason, progressScore |
-| `Goal` | `user_goal` | goalLevel, goalType, targetDate |
+| `Goal` | `user_goal` | goalLevel, goalType, targetDate, preferredSegment |
 | `EliteHabit` | `elite_habit_lib` | habitCategory(1-4), habitContent, intensityLevel |
 | `TimeBlockConfig` | `time_block_config` | start, end, label, type(0固定/1待办/2推荐), day_type |
+| `VentingEntry` | `venting_log` | recordDate, content — 本地存储，不同步 |
+| `DailySummaryEntry` | `daily_summary_log` | recordDate, content — 本地存储，不同步 |
 
 **所有模型均有 `copyWith` 方法**，用于 Provider 增量更新时的 ID 注入和字段修改。
 
@@ -113,13 +115,16 @@ AI 不可用时自动 fallback 到本地 `generateTodayPlan()`。
 5. 自动判断日类型：周末/节假日用 weekend 模板，其他用 workday 模板
 6. **目标首选时段**：目标可配置 `preferredSegment`（上班前/午休/下班后），未匹配目标自动安排在指定时段，具体时间从 `WorkSchedule` 推导
 7. **发声内容移晚间**：含"英语""演讲""口语""朗读"等关键词的计划自动移至 18:00 后（安全网，首选时段已覆盖大部分场景）
-8. **计时器完成自动标记**：FocusTimerProvider 的 `stopTimer()` 在保存学习记录后，将对应 `daily_model_plan` 行标记为 `isCompleted=1` + `completedAt`
+8. **定点吐槽/每日总结**：若配置了 `ventingTime` 或 `summaryTime`，在对应时间块优先插入吐槽项（planType=6）或总结项（planType=7），使用 `_blockContainsTime()` 判断
+9. **计时器完成自动标记**：FocusTimerProvider 的 `stopTimer()` 将计划项标记为 `isCompleted=2`（完成）
+10. **四状态完成体系**：`isCompleted` 0=未做, 1=做了部分, 2=完成, 3=超额完成。`completionState`/`completionLabel` getter 在模型层提供统一访问。`completedAt` 仅在状态 >= 2 时写入
+11. **完成预设快捷填入**：FocusSheet 提供 6 个预设短语，点击填入实际状况记录，支持二次点击追加
 
-**配置（精英对标页 `ElitePage`）**：
-- 工作时间设置：工作起止、午休、学习时段
-- 时间块配置：工作日/周末两套独立配置，可编辑每块起止/类型/标签
-- 自定义优先事项：指定优先内容和首选时段
-- 精英习惯库：晨间/日间/下班后/睡前四类习惯
+**计划类型码**：0=综合, 1=学习, 2=副业, 3=阅读, 4=休闲, 5=心理, 6=吐槽, 7=总结
+
+**配置**：
+- 首页计划设置（`_showPlanSettings`）：工作时间、午休、学习时段、定点吐槽开关+时间、每日总结开关+时间
+- 精英对标页（`ElitePage`）：时间块配置（工作日/周末两套）、自定义优先事项、精英习惯库
 
 ## 页面职责
 
